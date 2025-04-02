@@ -2,7 +2,7 @@ import sys
 import os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
-    QTextEdit, QTabWidget, QHBoxLayout, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QLabel
+    QTextEdit, QTabWidget, QHBoxLayout, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QLabel, QSplitter
 )
 from PyQt5.QtCore import pyqtSignal, QThread, Qt, QRectF
 from PyQt5.QtGui import QBrush, QPen, QColor
@@ -24,7 +24,6 @@ class GanttChartWidget(QGraphicsView):
         2: QColor("#99ff99"),  # green-ish
         3: QColor("#9999ff"),  # blue-ish
         4: QColor("#ffff99"),  # yellow-ish
-        # Add more if you have more task IDs
     }
 
     def __init__(self, parent=None):
@@ -48,34 +47,24 @@ class GanttChartWidget(QGraphicsView):
         if not self.timeline:
             return
 
-        # Label at the top
+        # Title at the top.
         title = QLabel(f"{self.algorithm_name} Gantt Chart")
         title_item = self.scene.addWidget(title)
         title_item.setPos(0, 0)
 
-        # A small vertical offset below the title
         offset_y = 30
-
-        # We'll scale time so that 1ms = 1 pixel (change if needed).
-        time_scale = 1.0
-
-        # The height of each task bar
+        time_scale = 1.0  # 1ms = 1 pixel
         bar_height = 20
 
-        # We'll track the "lanes" by task_id, so each task_id has its own Y offset.
-        # But for a simpler chart, we can just stack them in chronological order.
-        # However, a typical Gantt chart places each task on its own row.
-        # Let's do that. We'll need to track the row for each task_id.
-        # In this example, we have up to 4 tasks, so let's just do a small mapping:
+        # Assign each task its own row.
         task_rows = {}
         next_row = 0
-
         for (task_id, start_ms, end_ms) in self.timeline:
             if task_id not in task_rows:
                 task_rows[task_id] = next_row
                 next_row += 1
 
-        # Draw each event
+        # Draw each scheduled segment.
         for (task_id, start_ms, end_ms) in self.timeline:
             row = task_rows[task_id]
             top = offset_y + row * (bar_height + 10)
@@ -85,117 +74,170 @@ class GanttChartWidget(QGraphicsView):
             color = self.TASK_COLORS.get(task_id, QColor("#cccccc"))
             rect_item = self.scene.addRect(
                 QRectF(left, top, width, bar_height),
-                QPen(Qt.black), 
+                QPen(Qt.black),
                 QBrush(color)
             )
-
-            # Optionally add text on the rectangle
             text_label = f"T{task_id}"
             text_item = self.scene.addSimpleText(text_label)
-            text_item.setPos(left + width/2 - 5, top)  # center-ish
+            text_item.setPos(left + width/2 - 5, top)
 
-        # Adjust the scene rect so everything is visible
         max_time = max(e[2] for e in self.timeline) if self.timeline else 0
-        self.scene.setSceneRect(0, 0, max_time * time_scale + 100, offset_y + (next_row * (bar_height+10) + 50))
+        self.scene.setSceneRect(0, 0, max_time * time_scale + 100, offset_y + (next_row * (bar_height + 10) + 50))
+
+
+class QueueStateWidget(QTextEdit):
+    """
+    A widget to display queue state changes for MLQ and MLFQ.
+    """
+    def __init__(self, title, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setStyleSheet("background-color: #f0f0f0;")
+        self.append(f"--- {title} Queue State ---\n")
+
+    def update_state(self, msg):
+        self.append(msg)
+
 
 class SchedulerThread(QThread):
-    log_signal = pyqtSignal(str)            # For textual logs
-    gantt_signal = pyqtSignal(list, str)    # For timeline data
+    log_signal = pyqtSignal(str)         # For textual logs
+    gantt_signal = pyqtSignal(list, str)   # For timeline data
+    queue_signal = pyqtSignal(str)         # For queue state updates (MLQ, MLFQ)
 
     def __init__(self, algorithm="RR", time_quantum=100, parent=None):
         super().__init__(parent)
-        self.algorithm = algorithm
+        self.algorithm = algorithm.upper()
         self.time_quantum = time_quantum
 
     def run(self):
-        # Create a Scheduler with a custom logger callback that emits log_signal.
+        # Create a Scheduler with a custom logger that emits log_signal.
         def logger(msg):
             self.log_signal.emit(msg)
-
+            # For MLQ and MLFQ, emit extra signal for key queue state changes.
+            if self.algorithm in ["MLQ", "MLFQ"]:
+                if ("priority queue" in msg) or ("demoted" in msg):
+                    self.queue_signal.emit(msg)
         sched = Scheduler(
             algorithm=self.algorithm,
             time_quantum=self.time_quantum,
             logger=logger
         )
         sched.run()
-
-        # After finishing, emit the timeline so the GUI can draw the Gantt chart.
         self.gantt_signal.emit(sched.timeline, self.algorithm)
+
 
 class SchedulerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Threads for each scheduler algorithm.
         self.fcfs_thread = None
         self.rr_thread = None
         self.priority_thread = None
+        self.sjf_thread = None
+        self.mlq_thread = None
+        self.mlfq_thread = None
+        self.edf_thread = None
+        self.cfs_thread = None
 
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("Scheduler Comparison GUI")
-        self.setGeometry(100, 100, 1000, 600)
+        self.setGeometry(100, 100, 1400, 900)
         
-        # Main layout
         central_widget = QWidget(self)
         main_layout = QVBoxLayout(central_widget)
         
-        # Button layout at the top
         button_layout = QHBoxLayout()
         self.run_all_button = QPushButton("Run All Schedulers", self)
         self.run_all_button.clicked.connect(self.run_all_schedulers)
         button_layout.addWidget(self.run_all_button)
         main_layout.addLayout(button_layout)
         
-        # Tab widget for separate scheduler outputs
         self.tab_widget = QTabWidget(self)
 
-        # 1) FCFS Tab
-        self.fcfs_text = QTextEdit(self)
-        self.fcfs_text.setReadOnly(True)
-        fcfs_log_tab_index = self.tab_widget.addTab(self.fcfs_text, "FCFS Log")
+        # Log Tabs
+        self.fcfs_text = QTextEdit(self); self.fcfs_text.setReadOnly(True)
+        self.rr_text = QTextEdit(self); self.rr_text.setReadOnly(True)
+        self.priority_text = QTextEdit(self); self.priority_text.setReadOnly(True)
+        self.sjf_text = QTextEdit(self); self.sjf_text.setReadOnly(True)
+        self.mlq_text = QTextEdit(self); self.mlq_text.setReadOnly(True)
+        self.mlfq_text = QTextEdit(self); self.mlfq_text.setReadOnly(True)
+        self.edf_text = QTextEdit(self); self.edf_text.setReadOnly(True)
+        self.cfs_text = QTextEdit(self); self.cfs_text.setReadOnly(True)
 
-        # 2) RR Tab
-        self.rr_text = QTextEdit(self)
-        self.rr_text.setReadOnly(True)
-        rr_log_tab_index = self.tab_widget.addTab(self.rr_text, "RR Log")
+        self.tab_widget.addTab(self.fcfs_text, "FCFS Log")
+        self.tab_widget.addTab(self.rr_text, "RR Log")
+        self.tab_widget.addTab(self.priority_text, "Priority Log")
+        self.tab_widget.addTab(self.sjf_text, "SJF Log")
+        self.tab_widget.addTab(self.mlq_text, "MLQ Log")
+        self.tab_widget.addTab(self.mlfq_text, "MLFQ Log")
+        self.tab_widget.addTab(self.edf_text, "EDF Log")
+        self.tab_widget.addTab(self.cfs_text, "CFS Log")
 
-        # 3) Priority Tab
-        self.priority_text = QTextEdit(self)
-        self.priority_text.setReadOnly(True)
-        priority_log_tab_index = self.tab_widget.addTab(self.priority_text, "Priority Log")
-
-        # 4) FCFS Gantt Chart
+        # Gantt Chart Tabs (for FCFS, RR, Priority, SJF, EDF, CFS)
         self.fcfs_gantt = GanttChartWidget()
-        fcfs_gantt_tab_index = self.tab_widget.addTab(self.fcfs_gantt, "FCFS Gantt")
-
-        # 5) RR Gantt Chart
         self.rr_gantt = GanttChartWidget()
-        rr_gantt_tab_index = self.tab_widget.addTab(self.rr_gantt, "RR Gantt")
-
-        # 6) Priority Gantt Chart
         self.priority_gantt = GanttChartWidget()
-        priority_gantt_tab_index = self.tab_widget.addTab(self.priority_gantt, "Priority Gantt")
+        self.sjf_gantt = GanttChartWidget()
+        self.edf_gantt = GanttChartWidget()
+        self.cfs_gantt = GanttChartWidget()
+
+        # For MLQ and MLFQ, we create a combined widget with both Gantt chart and Queue State view.
+        self.mlq_gantt = GanttChartWidget()
+        self.mlq_queue = QueueStateWidget("MLQ")
+        self.mlfq_gantt = GanttChartWidget()
+        self.mlfq_queue = QueueStateWidget("MLFQ")
+
+        # Create container widgets for MLQ and MLFQ visualizations.
+        self.mlq_container = QWidget()
+        mlq_layout = QHBoxLayout(self.mlq_container)
+        mlq_layout.addWidget(self.mlq_gantt)
+        mlq_layout.addWidget(self.mlq_queue)
+
+        self.mlfq_container = QWidget()
+        mlfq_layout = QHBoxLayout(self.mlfq_container)
+        mlfq_layout.addWidget(self.mlfq_gantt)
+        mlfq_layout.addWidget(self.mlfq_queue)
+
+        # Add tabs for Gantt charts.
+        self.tab_widget.addTab(self.fcfs_gantt, "FCFS Gantt")
+        self.tab_widget.addTab(self.rr_gantt, "RR Gantt")
+        self.tab_widget.addTab(self.priority_gantt, "Priority Gantt")
+        self.tab_widget.addTab(self.sjf_gantt, "SJF Gantt")
+        self.tab_widget.addTab(self.mlq_container, "MLQ Visual")
+        self.tab_widget.addTab(self.mlfq_container, "MLFQ Visual")
+        self.tab_widget.addTab(self.edf_gantt, "EDF Gantt")
+        self.tab_widget.addTab(self.cfs_gantt, "CFS Gantt")
 
         main_layout.addWidget(self.tab_widget)
         self.setCentralWidget(central_widget)
 
     def run_all_schedulers(self):
-        # Clear previous logs
-        self.fcfs_text.clear()
-        self.rr_text.clear()
-        self.priority_text.clear()
+        # Clear previous logs and charts.
+        for widget in [self.fcfs_text, self.rr_text, self.priority_text, self.sjf_text,
+                       self.mlq_text, self.mlfq_text, self.edf_text, self.cfs_text]:
+            widget.clear()
+        for chart in [self.fcfs_gantt, self.rr_gantt, self.priority_gantt,
+                      self.sjf_gantt, self.mlq_gantt, self.mlfq_gantt, self.edf_gantt, self.cfs_gantt]:
+            chart.set_timeline([], chart.__class__.__name__)
+        # Also clear queue state widgets.
+        self.mlq_queue.clear()
+        self.mlq_queue.append("--- MLQ Queue State ---\n")
+        self.mlfq_queue.clear()
+        self.mlfq_queue.append("--- MLFQ Queue State ---\n")
 
-        # Clear Gantt charts
-        self.fcfs_gantt.set_timeline([], "FCFS")
-        self.rr_gantt.set_timeline([], "RR")
-        self.priority_gantt.set_timeline([], "PRIORITY")
-        
-        # Create scheduler threads for each algorithm
+        # Create threads for each algorithm.
         self.fcfs_thread = SchedulerThread(algorithm="FCFS", time_quantum=100)
         self.rr_thread = SchedulerThread(algorithm="RR", time_quantum=100)
         self.priority_thread = SchedulerThread(algorithm="PRIORITY", time_quantum=100)
+        self.sjf_thread = SchedulerThread(algorithm="SJF", time_quantum=100)
+        self.mlq_thread = SchedulerThread(algorithm="MLQ", time_quantum=100)
+        self.mlfq_thread = SchedulerThread(algorithm="MLFQ", time_quantum=100)
+        self.edf_thread = SchedulerThread(algorithm="EDF", time_quantum=100)
+        self.cfs_thread = SchedulerThread(algorithm="CFS", time_quantum=100)
         
-        # Connect each thread's signals to the appropriate text edit & gantt chart
+        # Connect signals to log displays and Gantt updates.
         self.fcfs_thread.log_signal.connect(self.fcfs_text.append)
         self.fcfs_thread.gantt_signal.connect(self.update_fcfs_gantt)
 
@@ -204,11 +246,33 @@ class SchedulerGUI(QMainWindow):
 
         self.priority_thread.log_signal.connect(self.priority_text.append)
         self.priority_thread.gantt_signal.connect(self.update_priority_gantt)
+
+        self.sjf_thread.log_signal.connect(self.sjf_text.append)
+        self.sjf_thread.gantt_signal.connect(self.update_sjf_gantt)
+
+        self.mlq_thread.log_signal.connect(self.mlq_text.append)
+        self.mlq_thread.gantt_signal.connect(self.update_mlq_gantt)
+        self.mlq_thread.queue_signal.connect(self.update_mlq_queue_state)
+
+        self.mlfq_thread.log_signal.connect(self.mlfq_text.append)
+        self.mlfq_thread.gantt_signal.connect(self.update_mlfq_gantt)
+        self.mlfq_thread.queue_signal.connect(self.update_mlfq_queue_state)
+
+        self.edf_thread.log_signal.connect(self.edf_text.append)
+        self.edf_thread.gantt_signal.connect(self.update_edf_gantt)
+
+        self.cfs_thread.log_signal.connect(self.cfs_text.append)
+        self.cfs_thread.gantt_signal.connect(self.update_cfs_gantt)
         
-        # Start all threads concurrently
+        # Start all threads concurrently.
         self.fcfs_thread.start()
         self.rr_thread.start()
         self.priority_thread.start()
+        self.sjf_thread.start()
+        self.mlq_thread.start()
+        self.mlfq_thread.start()
+        self.edf_thread.start()
+        self.cfs_thread.start()
 
     def update_fcfs_gantt(self, timeline, algorithm):
         self.fcfs_gantt.set_timeline(timeline, algorithm)
@@ -218,6 +282,27 @@ class SchedulerGUI(QMainWindow):
 
     def update_priority_gantt(self, timeline, algorithm):
         self.priority_gantt.set_timeline(timeline, algorithm)
+
+    def update_sjf_gantt(self, timeline, algorithm):
+        self.sjf_gantt.set_timeline(timeline, algorithm)
+
+    def update_mlq_gantt(self, timeline, algorithm):
+        self.mlq_gantt.set_timeline(timeline, algorithm)
+
+    def update_mlfq_gantt(self, timeline, algorithm):
+        self.mlfq_gantt.set_timeline(timeline, algorithm)
+
+    def update_edf_gantt(self, timeline, algorithm):
+        self.edf_gantt.set_timeline(timeline, algorithm)
+
+    def update_cfs_gantt(self, timeline, algorithm):
+        self.cfs_gantt.set_timeline(timeline, algorithm)
+
+    def update_mlq_queue_state(self, msg):
+        self.mlq_queue.update_state(msg)
+
+    def update_mlfq_queue_state(self, msg):
+        self.mlfq_queue.update_state(msg)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
