@@ -146,11 +146,17 @@ class Scheduler:
         self.logger("[RR] All tasks finished.\n")
 
     def run_priority(self):
-        self.logger("\n[PRIORITY] Starting Priority scheduling.")
+        self.logger("\n[PRIORITY] Starting Priority scheduling with dynamic feedback and aging.")
         current_time = 0
         tasks = [dict(t) for t in self.tasks]
+        FEEDBACK_FACTOR = 50
+        AGING_INCREMENT = 1  # Boost priority of waiting tasks
+
         while tasks:
+            # Sort by current priority (higher = better)
             tasks.sort(key=lambda x: -x['priority'])
+
+            # Pick highest-priority task to run
             task = tasks[0]
             start_time = current_time
             run_duration = min(self.time_quantum, task['remaining_time'])
@@ -160,10 +166,28 @@ class Scheduler:
             self.logger(f"[PRIORITY] Running Task {task['id']} from {start_time} to {end_time} (priority={task['priority']}).")
             time.sleep(run_duration / 1000.0 * 0.1)
             current_time = end_time
+
+            # Dynamic feedback: decay priority of running task
+            cpu_time_used = self.time_quantum - task['remaining_time']
+            new_priority = task['priority'] - (cpu_time_used // FEEDBACK_FACTOR)
+            if new_priority < 1:
+                new_priority = 1
+            self.logger(f"[PRIORITY] Adjusted priority of Task {task['id']} from {task['priority']} to {new_priority}")
+            task['priority'] = new_priority
+
+            # Aging: increase priority of all waiting tasks
+            for i in range(1, len(tasks)):
+                waiting_task = tasks[i]
+                waiting_task['priority'] += AGING_INCREMENT
+                self.logger(f"[PRIORITY] Aging: Increased priority of Task {waiting_task['id']} to {waiting_task['priority']}")
+
             if task['remaining_time'] <= 0:
                 self.logger(f"[PRIORITY] Task {task['id']} finished at {current_time}ms.")
                 tasks.remove(task)
+
         self.logger("[PRIORITY] All tasks finished.\n")
+
+
 
     def run_sjf(self):
         self.logger("\n[SJF] Starting Shortest Job First scheduling (non-preemptive).")
