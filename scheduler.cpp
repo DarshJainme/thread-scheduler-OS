@@ -1,3 +1,4 @@
+// File: scheduler.cpp — updated initializer and includes
 #include "scheduler.h"
 #include <thread>
 #include <chrono>
@@ -8,26 +9,29 @@
 #include <vector>
 #include <unordered_map>
 #include <queue>
+#include <functional>
+#include <string>
+
 using namespace std;
 
-Scheduler::Scheduler(Algorithm algo, int tq, std::function<void(const std::string&)> lg)
+Scheduler::Scheduler(Algorithm algo, int tq, function<void(const string&)> lg)
     : algorithm(algo), time_quantum(tq), logger(lg)
 {
-    // tasks[i] ={id, priority, remaining time, arrival time, deadline, level}
+    // tasks[i] = {id, priority, remaining_time, arrival_time, deadline, level}
     tasks = {
-        {1,8,250,0,300},
-        {2,13,100,100,350},
-        {3,19,300,220,600},
-        {4,21,150,500,700}
+        {1, 8,   250, 0,   300, 0},
+        {2, 13,  100, 100, 350, 0},
+        {3, 19,  300, 220, 600, 0},
+        {4, 21,  150, 500, 700, 0}
     };
 }
 
-void Scheduler::log(const std::string &msg) {
+void Scheduler::log(const string &msg) {
     if (logger) logger(msg);
-    else std::cout << msg << "\n";
+    else cout << msg << "\n";
 }
 
-const std::vector<TimelineEntry>& Scheduler::timeline() const {
+const vector<TimelineEntry>& Scheduler::timeline() const {
     return _timeline;
 }
 

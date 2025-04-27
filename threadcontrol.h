@@ -1,24 +1,39 @@
+// File: threadcontrol.h — updated for ULT context management
 #ifndef THREADCONTROL_H
 #define THREADCONTROL_H
 
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
+#include <cstddef>
+#include <ucontext.h>
+#include <vector>
+
+// Forward-declared scheduler context globals
+extern ucontext_t sched_ctx;
+extern size_t g_current_idx;
+
+// User-level thread context structure
+struct ULTContext {
+    ucontext_t ctx;
+    bool finished;
+};
+
+// Shared contexts array (defined in scheduler.cpp)
+extern std::vector<ULTContext> g_contexts;
 
 class ThreadControl {
 public:
     ThreadControl();
 
-    void waitUntilRunnable();        // Called inside thread
-    void wake();                     // Called by scheduler
-    void finish();                   // Signal thread to terminate
-    bool isFinished() const;
+    // Called inside a ULT: yields to scheduler until resumed
+    void waitUntilRunnable();
 
-private:
-    std::mutex mtx;
-    std::condition_variable cv;
-    std::atomic<bool> run_flag;
-    std::atomic<bool> finished;
+    // No-op for ULT: scheduler directly swaps in
+    void wake();
+
+    // Signal that this ULT should terminate
+    void finish();
+
+    // Check if finish() has been called for this ULT
+    bool isFinished() const;
 };
 
 #endif // THREADCONTROL_H

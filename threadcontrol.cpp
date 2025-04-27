@@ -1,31 +1,33 @@
-    #include "threadcontrol.h"
-    #include <iostream>
-    #include <thread>
+// File: threadcontrol.cpp — user‐level thread control for ULT scheduler
+#include "threadcontrol.h"
+#include <ucontext.h>
+#include <vector>
+#include <cstddef>
 
-    ThreadControl::ThreadControl()
-        : run_flag(false), finished(false) {}
+// Externs from the ULT scheduler:
+extern ucontext_t sched_ctx;
+extern size_t g_current_idx;
+struct ULTContext { ucontext_t ctx; bool finished; };
+extern std::vector<ULTContext> g_contexts;
 
-    void ThreadControl::waitUntilRunnable() {
-        std::unique_lock<std::mutex> lock(mtx);
-        std::cout << "[Thread " << std::this_thread::get_id() << "] waiting...\n";
-        cv.wait(lock, [&]() { return run_flag || finished; });
-        std::cout << "[Thread " << std::this_thread::get_id() << "] woke up!\n";
-    }
+ThreadControl::ThreadControl() {
+    // nothing to initialize for ULT
+}
 
-    void ThreadControl::wake() {
-        std::lock_guard<std::mutex> lock(mtx);
-        run_flag = true;
-        std::cout << "[Scheduler] Waking thread...\n";
-        cv.notify_one();
-    }
+void ThreadControl::waitUntilRunnable() {
+    // Park this ULT: save its context and switch back to scheduler
+    swapcontext(&g_contexts[g_current_idx].ctx, &sched_ctx);
+}
 
-    void ThreadControl::finish() {
-        std::lock_guard<std::mutex> lock(mtx);
-        finished = true;
-        run_flag = false;
-        cv.notify_all();
-    }
+void ThreadControl::wake() {
+    // No operation: scheduler resumes the ULT by swapping contexts
+}
 
-    bool ThreadControl::isFinished() const {
-        return finished;
-    }
+void ThreadControl::finish() {
+    // Mark this ULT as finished so its trampoline can exit
+    g_contexts[g_current_idx].finished = true;
+}
+
+bool ThreadControl::isFinished() const {
+    return g_contexts[g_current_idx].finished;
+}
