@@ -11,6 +11,7 @@
 #include <QImage>
 #include "scheduler.h"
 #include "threadedscheduler.h"
+#include "analysis.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
@@ -27,7 +28,7 @@ void MainWindow::on_runButton_clicked() {
 
     QStringList basicAlgos = {"FCFS", "RR", "PRIORITY", "SJF", "MLQ", "MLFQ", "EDF", "CFS"};
 
-    QStringList threadedAlgos = {"T_FCFS", "T_RR", "T_PRIORITY"};
+    QStringList threadedAlgos = {"T_FCFS", "T_RR", "T_PRIORITY", "T_MLFQ"};
 
     // Run Basic Schedulers
     for (int alg = FCFS; alg <= CFS; ++alg) {
@@ -42,7 +43,7 @@ void MainWindow::on_runButton_clicked() {
     }
 
     // Run Threaded Schedulers
-    for (int alg = T_FCFS; alg <= T_PRIORITY; ++alg) {
+    for (int alg = T_FCFS; alg <=T_MLFQ; ++alg) {
         QString name = threadedAlgos[alg];
         createAlgoTab(name, ui->threadedSchedulerTabs, logs_threaded, gantts_threaded);
 
@@ -52,7 +53,7 @@ void MainWindow::on_runButton_clicked() {
         ts.run();
         gantts_threaded[name]->drawTimeline(ts.timeline(), name);
     }
-
+    analyzeAlgorithms();
 }
 
 void MainWindow::createAlgoTab(const QString &name, QTabWidget *parentTabs,

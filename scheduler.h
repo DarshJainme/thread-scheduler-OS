@@ -14,9 +14,8 @@ struct Task {
     int id;
     int priority;
     int remaining_time;
+    int arrival_time;
     int deadline;    // For EDF
-    int level;       // For MLFQ
-    double vruntime; // For CFS
 };
 
 struct TimelineEntry {
