@@ -13,11 +13,9 @@
 #include "bits/stdc++.h"
 
 void analyzeAlgorithms() {
-    // Define a common set of originalTasks (arrival at time 0)
     std::vector<Task> originalTasks;
     std::random_device rd;
     std::mt19937 gen(rd());
-    // choose your ranges here:
     std::uniform_int_distribution<> pri_d(1, 10);
     std::uniform_int_distribution<> rem_d(1, 500);
     std::uniform_int_distribution<> arr_d(0, 10);
@@ -38,7 +36,6 @@ void analyzeAlgorithms() {
         originalTasks.push_back(tk);
     }
 
-    // Algorithms to test
     std::vector<Algorithm> algos = {
         FCFS, RR, PRIORITY, SJF, MLQ, MLFQ, EDF, CFS
     };
@@ -50,23 +47,15 @@ void analyzeAlgorithms() {
     const int timeQuantum = 50;
 
     std::cout << std::fixed << std::setprecision(2);
-
-    // Run each algorithm and compute metrics
     for (size_t i = 0; i < algos.size(); ++i) {
         Algorithm algo = algos[i];
         std::string name = names[i];
-
-        // Instantiate scheduler with a no-op logger
         Scheduler sched(algo, timeQuantum, [](const std::string&) {});
-        // Override originalTasks with our common set
+    
         sched.tasks = originalTasks;
         // start timer (chronos::high_resolution_clock::now())
         auto start = std::chrono::high_resolution_clock::now();
-
-        // Run the scheduler
         sched.run();
-
-        // end timer
         auto end = std::chrono::high_resolution_clock::now();
         // Calculate elapsed time in milliseconds
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -76,14 +65,10 @@ void analyzeAlgorithms() {
         std::map<int, int> completion;
         for (const auto &entry : sched.timeline()) {
             int id = entry.task_id;
-            // record first start
             if (!firstStart.count(id))
                 firstStart[id] = entry.start_time;
-            // update completion to latest end
             completion[id] = entry.end_time;
         }
-
-        // Compute and accumulate metrics
         double totalResponse = 0.0;
         double totalTurnaround = 0.0;
         double totalWaiting = 0.0;
