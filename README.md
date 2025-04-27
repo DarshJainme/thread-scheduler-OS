@@ -5,6 +5,8 @@ This script is a simulation of various **CPU thread scheduling algorithms** impl
 
 Each scheduling algorithm has unique characteristics that determine how threads are selected and executed. This simulation helps understand the advantages and drawbacks of different scheduling policies in an operating system, particularly in **multi-threaded environments**.
 
+Report Regarding our project is also present here.
+
 ## Supported Scheduling Algorithms
 
 ### 1. First-Come, First-Served (FCFS) - **Type: Non-Preemptive**
