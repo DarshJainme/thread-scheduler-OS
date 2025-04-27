@@ -96,7 +96,7 @@ void* thread1(void*) {
     cout << "Thread1: trying to access sem2..."<<endl;
     while (true) {
         if (paused_thread1.load()) {
-            cout << "Thread1: PAUSED — waiting for resume (sem1 might be released externally!)"<<endl;
+            cout << "Thread1: PAUSED — waiting for resume (sem1 might be released externally)"<<endl;
             // Just wait till resume, assume sem1 is already released
             sem_wait(&sem_resume1);
 

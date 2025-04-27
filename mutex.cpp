@@ -21,61 +21,6 @@ map<pthread_t, pthread_mutex_t*> waiting_for;
 
 pthread_mutex_t graphMutex = PTHREAD_MUTEX_INITIALIZER; 
 
-void* deadlock_detector(void*)
-{
-    while (true) {
-        sleep(2);
-        pthread_mutex_lock(&graphMutex);
-        map<pthread_t, pthread_t> wait_for_graph;
-
-        for (const auto& entry : waiting_for) {
-            pthread_t waiting_thread = entry.first;
-            pthread_mutex_t* mutex = entry.second;
-            if (mutex_owner.find(mutex) != mutex_owner.end()) {
-                pthread_t owner_thread = mutex_owner[mutex];
-                wait_for_graph[waiting_thread] = owner_thread;
-            }
-        }
-
-        set<pthread_t> visited;
-        set<pthread_t> recursion_stack;
-
-        function<bool(pthread_t)> dfs = [&](pthread_t current) -> bool {
-            visited.insert(current);
-            recursion_stack.insert(current);
-
-            auto it = wait_for_graph.find(current);
-            if (it != wait_for_graph.end()) {
-                pthread_t next = it->second;
-                if (recursion_stack.find(next) != recursion_stack.end()) {
-                    return true; 
-                }
-                if (visited.find(next) == visited.end()) {
-                    if (dfs(next)) return true;
-                }
-            }
-
-            recursion_stack.erase(current);
-            return false;
-        };
-
-        bool deadlock_found = false;
-        for (const auto& node : wait_for_graph) {
-            if (visited.find(node.first) == visited.end()) {
-                if (dfs(node.first)) {
-                    deadlock_found = true;
-                    break;
-                }
-            }
-        }
-
-        if (deadlock_found) {
-            cout << "\n>>> DEADLOCK DETECTED (by deadlock_detector) <<<" << endl;
-        }
-        pthread_mutex_unlock(&graphMutex);
-    }
-    return nullptr;
-}
 
 void lock_mutex(pthread_mutex_t* mtx)
 {
@@ -108,7 +53,8 @@ void* thread1(void*)
 
     usleep(100 * 1000); 
     cout<<"Thread1 trying to aquire mutex2"<<endl;
-    while (true) {
+    while (true) 
+    {
         // 1) Pause handler
         pthread_mutex_lock(&controlMutex);
           if (paused_thread1) {
@@ -186,8 +132,9 @@ void* preemptor(void*)
     sleep(5);
     cout << "\n>>> DEADLOCK DETECTED (by preemptor)! PREEMPTING THREAD 1 <<<" << endl;
     pthread_mutex_lock(&controlMutex);
-    paused_thread1 = true;
+    paused_thread1 = true;  // Flag tells Thread 1 to unlock
     pthread_mutex_unlock(&controlMutex);
+    pthread_cond_signal(&cv1); 
     cout << "[Preempt] Signaled thread1 to pause." << endl;
     usleep(300 * 1000);
     if (thread1_locked_mutex1) 
@@ -227,7 +174,6 @@ int main()
     
     pthread_create(&t2, nullptr, thread2, nullptr);
     pthread_create(&p, nullptr, preemptor, nullptr);
-    pthread_create(&d, nullptr, deadlock_detector, nullptr);
     pthread_join(t1, nullptr);
     pthread_join(t2, nullptr);
     pthread_cancel(d);
