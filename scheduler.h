@@ -1,4 +1,3 @@
-// File: scheduler.h — updated to match initializer fields
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
@@ -6,31 +5,30 @@
 #include <string>
 #include <functional>
 
-// Supported scheduling algorithms
+// we support the following algorithms
 enum Algorithm {
     FCFS, RR, PRIORITY,
     SJF, MLQ, MLFQ,
     EDF, CFS
 };
 
-// Represents a task in the scheduler
+// Task structure: represents a task with its properties
 struct Task {
-    int id;
-    int priority;
-    int remaining_time;
-    int arrival_time;
-    int deadline;    // For EDF
-    int level;       // For MLQ/MLFQ default queue level
+    int id;                   // Task ID
+    int priority;            // priority level
+    int remaining_time;      // remaining time to finish (initially it's the burst time)
+    int arrival_time;       // time of arrival
+    int deadline;           // deadline for the task
+    int level;              // for MLQ/MLFQ, the current level of the task 
 };
 
-// Single timeline entry: a slice of execution
+// we record the timeline so we can draw the Gantt chart later
 struct TimelineEntry {
     int id;
     int start_time;
     int end_time;
 };
 
-// Main scheduler class
 class Scheduler {
 public:
     Scheduler(Algorithm algo,
@@ -40,7 +38,6 @@ public:
     void run();
     const std::vector<TimelineEntry>& timeline() const;
 
-    // Individual algorithm runners
     void runFCFS();
     void runRR();
     void runPriority();
@@ -50,7 +47,6 @@ public:
     void runEDF();
     void runCFS();
 
-    // Logging utility
     void log(const std::string& msg);
 
     Algorithm algorithm;
@@ -60,4 +56,4 @@ public:
     std::function<void(const std::string&)> logger;
 };
 
-#endif // SCHEDULER_H
+#endif

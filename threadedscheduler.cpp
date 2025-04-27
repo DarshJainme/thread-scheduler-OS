@@ -14,35 +14,21 @@ int getcontext(ucontext_t*) ;
 int setcontext(const ucontext_t*) ;
 void makecontext(ucontext_t*, void (*)(void), int, ...) ;
 int swapcontext(ucontext_t*, const ucontext_t*) ;
-
-// Constants
-// Somewhere in threadedscheduler.h
-
-
-// User-level synchronization primitives
 static ULTMutex shared_mtx;
 static ULTCondVar shared_cv;
 static bool data_ready = false;
-// Simulated shared resource
 static int shared_counter = 0;
 
 // ULT context structure
 
-// Scheduler globals
 ucontext_t sched_ctx;
 ThreadedScheduler* g_sched_ptr = nullptr;
 std::vector<ULTContext> g_contexts;
 size_t g_current_idx = 0;
-
-// Trampoline function for each ULT
 static void task_trampoline(uintptr_t idx) {
     ULTContext& c = g_contexts[idx];
     auto& tk = g_sched_ptr->tasks[idx];
-
-    // Initial yield to scheduler
     swapcontext(&c.ctx, &sched_ctx);
-
-    // Demonstrate condvar: only thread 0 signals, others wait
     if (idx == 0) {
         shared_mtx.lock();
         data_ready = true;
@@ -55,13 +41,9 @@ static void task_trampoline(uintptr_t idx) {
         }
         shared_mtx.unlock();
     }
-
-    // Main execution loop
     while (!c.finished) {
         std::cout << "[Thread " << tk->id
                   << "] is now running task " << tk->id << "\n";
-
-        // Critical section protected by ULTMutex
         shared_mtx.lock();
         std::cout << "[Thread " << tk->id
                   << "] ENTER critical section (shared_counter = " << shared_counter << ")\n";
@@ -104,13 +86,11 @@ static void setup_contexts(ThreadedScheduler* sched) {
     }
 }
 
-// Run one ULT slice
 inline void run_ult_slice(size_t idx, int run_time) {
     g_current_idx = idx;
     swapcontext(&sched_ctx, &g_contexts[idx].ctx);
 }
 
-// Constructor
 ThreadedScheduler::ThreadedScheduler(ThreadedAlgorithm algo, int tq, std::function<void(const std::string&)>
     log)
     : algorithm(algo), time_quantum(tq), logger(log) {
@@ -202,16 +182,12 @@ void ThreadedScheduler::runRR() {
     }
     log("[T-RR] Done");
 }
-
-// Continue for other scheduling algorithms
 void ThreadedScheduler::runPriority() {
     log("[T-PRIORITY] Starting");
     int t = 0;
     bool work_left = true;
     while (work_left) {
         work_left = false;
-
-        // Sort tasks based on priority (higher priority should be executed first)
         std::sort(tasks.begin(), tasks.end(), [&](const std::unique_ptr<ThreadedTask>& a, const std::unique_ptr<ThreadedTask>& b) {
             return a->priority > b->priority;  // Adjust sorting based on priority
         });
@@ -258,8 +234,6 @@ void ThreadedScheduler::runMLFQ() {
             if (tk->arrival_time > t || tk->remaining_time <= 0) continue;
 
             work_left = true;
-
-            // Add tasks to appropriate queue based on remaining time (short tasks get high priority)
             int priority = (tk->remaining_time > 100) ? 2 : (tk->remaining_time > 50) ? 1 : 0;
             queues[priority].push(i);
 
@@ -310,12 +284,9 @@ void ThreadedScheduler::runCFS() {
 
             work_left = true;
 
-            // Insert task into CFS queue based on remaining execution time (shortest remaining time first)
             queue.push({-tk->remaining_time, i});
 
             tk->state = ThreadState::RUNNING;
-
-            // Process tasks with the shortest remaining time
             if (!queue.empty()) {
                 auto [remaining_time, idx] = queue.top();
                 queue.pop();

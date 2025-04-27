@@ -1,11 +1,30 @@
 # Thread Scheduler
+Created by:
+* Kartik Sarda: 23114047
+* Nitin Agiwal: 23114074
+* Darsh Jain: 23114023
+* Shyam Agarwal: 23116089
+* Krishna Pahariya: 23113089
 
 ## Overview
-This script is a simulation of various **CPU thread scheduling algorithms** implemented in Python. It allows users to run different scheduling strategies and observe how threads are scheduled over time. The script supports multiple algorithms, including First-Come, First-Served (FCFS), Round Robin (RR), Priority Scheduling, Shortest Job First (SJF), Multi-Level Queue (MLQ), Multi-Level Feedback Queue (MLFQ), Earliest Deadline First (EDF), and Completely Fair Scheduler (CFS).
+Efficient CPU scheduling is critical for both operating systems and user-level runtimes, as it directly affects application throughput, latency, and overall fairness. In this project, we present a flexible User–Mode Thread Scheduler with Dynamic Feedback that not only implements a novel adaptive scheduling framework but also exposes eight classical scheduling policies as selectable options:
+* First–Come, First–Served (FCFS)
+* Round Robin (RR)
+* Priority Scheduling (with and without Aging)
+* Shortest Job First (SJF)
+* Multi–Level Queue (MLQ)
+* Multi–Level Feedback Queue (MLFQ)
+* Earliest Deadline First (EDF)
+* Completely Fair Scheduler (CFS)
 
-Each scheduling algorithm has unique characteristics that determine how threads are selected and executed. This simulation helps understand the advantages and drawbacks of different scheduling policies in an operating system, particularly in **multi-threaded environments**.
+Users of our library can choose at runtime which of these eight policies to apply to their user-level threads, allowing easy comparison and integration into diverse application scenarios. Beyond offering these standard algorithms, our scheduler continuously monitors per-thread metrics—CPU utilization, latency to first run, and waiting times—and dynamically adjusts both time quanta and priorities during execution.
 
-Report Regarding our project is also present here.
+
+## Running the project
+* Install Qt6 community (open-source) edition.
+* Click on create new project.
+* Select `CMakeLists.txt` from the file browser window.
+* Run the project.
 
 ## Supported Scheduling Algorithms
 
@@ -71,24 +90,4 @@ Report Regarding our project is also present here.
 - Provides a balance between **throughput and responsiveness**.
 - Implemented in **Linux kernel**.
 
-## How This Script Works
-1. The user selects a scheduling algorithm when initializing the `Scheduler` class.
-2. The script generates a **set of threads** with attributes like arrival time, burst time, and priority.
-3. The selected algorithm processes the **ready queue** and schedules threads accordingly.
-4. The scheduler maintains a **timeline of execution**, tracking:
-   - When each thread starts and finishes.
-   - Context switches for **preemptive algorithms**.
-   - Starvation and aging effects (if applicable).
-5. The script logs execution details for analysis and visualization.
-6. Users can modify parameters like **quantum size, priority levels, and aging rules** to experiment with different behaviors.
-
-## Running the Script
-To execute the script with a specific scheduling algorithm, run:
-```bash
-python scheduler.py
-```
-By default, it runs the **Completely Fair Scheduler (CFS)**. You can change the algorithm by modifying the `Scheduler` initialization:
-```python
-s = Scheduler(algorithm="RR", time_quantum=100)
-s.run()
 ```

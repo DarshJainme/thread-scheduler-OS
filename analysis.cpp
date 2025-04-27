@@ -1,34 +1,27 @@
-// File: analysis.cpp
-// Purpose: Compare performance metrics (response time, waiting time, turnaround time)
-// across different scheduling algorithms using the Scheduler class.
-
 #include <iostream>
 #include <vector>
 #include <map>
 #include <string>
 #include <iomanip>
 #include <random>
+#include <chrono>
+#include <fstream>
+#include <cstdlib>
 #include "analysis.h"
 #include "scheduler.h"
-#include "bits/stdc++.h"
 
 void analyzeAlgorithms() {
-    // Define a common set of originalTasks (arrival at time 0)
     std::vector<Task> originalTasks;
     std::random_device rd;
     std::mt19937 gen(rd());
-    // choose your ranges here:
+
+    // generating random tasks for analysis
     std::uniform_int_distribution<> pri_d(1, 10);
     std::uniform_int_distribution<> rem_d(1, 500);
     std::uniform_int_distribution<> arr_d(0, 10);
     std::uniform_int_distribution<> dl_d(1, 500);
-    std::uniform_int_distribution<> lv_d(1, 5);
-    
-    struct Metrics { std::string name; double resp, tat, wait; };
-    std::vector<Metrics> all;
 
-    originalTasks.reserve(1e3);
-    for(int i = 1; i <= 1e3; ++i){
+    for (int i = 1; i <= 100; ++i) {
         Task tk;
         tk.id             = i;
         tk.priority       = pri_d(gen);
@@ -38,99 +31,70 @@ void analyzeAlgorithms() {
         originalTasks.push_back(tk);
     }
 
-    // Algorithms to test
-    std::vector<Algorithm> algos = {
-        FCFS, RR, PRIORITY, SJF, MLQ, MLFQ, EDF, CFS
-    };
-    std::vector<std::string> names = {
-        "FCFS", "RR", "PRIORITY", "SJF",
-        "MLQ", "MLFQ", "EDF", "CFS"
-    };
+    struct Metrics { std::string name; double resp, tat, wait; };
+    std::vector<Metrics> all;
 
+    std::vector<Algorithm> algos = { FCFS, RR, PRIORITY, SJF, MLQ, MLFQ, EDF, CFS };
+    std::vector<std::string> names = { "FCFS", "RR", "PRIORITY", "SJF", "MLQ", "MLFQ", "EDF", "CFS" };
     const int timeQuantum = 50;
 
     std::cout << std::fixed << std::setprecision(2);
 
-    // Run each algorithm and compute metrics
     for (size_t i = 0; i < algos.size(); ++i) {
-        Algorithm algo = algos[i];
-        std::string name = names[i];
-
-        // Instantiate scheduler with a no-op logger
-        Scheduler sched(algo, timeQuantum, [](const std::string&) {});
-        // Override originalTasks with our common set
+        Scheduler sched(algos[i], timeQuantum, [](const std::string&) {});
         sched.tasks = originalTasks;
-        // start timer (chronos::high_resolution_clock::now())
+
         auto start = std::chrono::high_resolution_clock::now();
-
-        // Run the scheduler
         sched.run();
+        auto end   = std::chrono::high_resolution_clock::now();
+        long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-        // end timer
-        auto end = std::chrono::high_resolution_clock::now();
-        // Calculate elapsed time in milliseconds
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-        // Collect first start time and completion time per task
-        std::map<int, int> firstStart;
-        std::map<int, int> completion;
-        for (const auto &entry : sched.timeline()) {
-            int id = entry.id;
-            // record first start
-            if (!firstStart.count(id))
-                firstStart[id] = entry.start_time;
-            // update completion to latest end
-            completion[id] = entry.end_time;
+        std::map<int,int> firstStart, completion;
+        for (const auto &e : sched.timeline()) {
+            firstStart.try_emplace(e.id, e.start_time);
+            completion[e.id] = e.end_time;
         }
 
-        // Compute and accumulate metrics
-        double totalResponse = 0.0;
-        double totalTurnaround = 0.0;
-        double totalWaiting = 0.0;
+        double totalResp=0, totalTat=0, totalWait=0;
         int n = originalTasks.size();
-
-        for (const auto &task : originalTasks) {
-            int id = task.id;
-            int burst = task.remaining_time;
-            int resp = firstStart[id];            // arrival=0
-            int tat = completion[id];           // completion - arrival(0)
-            int wt  = tat - burst;              // turnaround - burst
-
-            totalResponse   += resp;
-            totalTurnaround += tat;
-            totalWaiting    += wt;
+        for (auto &t : originalTasks) {
+            int burst = t.remaining_time;
+            int resp = firstStart[t.id] - t.arrival_time;
+            int tat  = completion[t.id]    - t.arrival_time;
+            int wt   = tat - burst;
+            totalResp += resp;
+            totalTat  += tat;
+            totalWait += wt;
         }
 
-        // Compute averages
-        double avgResp = totalResponse / n;
-        double avgTat  = totalTurnaround / n;
-        double avgWait = totalWaiting / n;
+        double avgResp = totalResp/n;
+        double avgTat  = totalTat/n;
+        double avgWait = totalWait/n;
 
-        // Print results
-        std::cout << name << " Metrics:\n";
-        std::cout << "  Elapsed Time       = " << elapsed << " ms\n";
-        std::cout << "  Avg Response Time   = " << avgResp   << "\n";
-        std::cout << "  Avg Turnaround Time = " << avgTat    << "\n";
-        std::cout << "  Avg Waiting Time    = " << avgWait   << "\n\n";
-        all.push_back({ name, avgResp, avgTat, avgWait });
+        std::cout << names[i] << " Metrics:\n"
+                  << "  Elapsed Time       = " << elapsed << " ms\n"
+                  << "  Avg Response Time   = " << avgResp << "\n"
+                  << "  Avg Turnaround Time = " << avgTat  << "\n"
+                  << "  Avg Waiting Time    = " << avgWait << "\n\n";
 
-        std::ofstream fout("metrics.csv");
-        fout << "Algorithm,Response,Turnaround,Waiting\n";
-        for (auto &m : all) {
-            fout << m.name << ","
-                << m.resp << ","
-                << m.tat  << ","
-                << m.wait << "\n";
-        }
-        fout.close();
-
-        std::system(
-            "./plot_metrics.py"
-        );
+        all.push_back({ names[i], avgResp, avgTat, avgWait });
     }
-}
 
-// int main(){
-//     analyzeAlgorithms();
-//     return 0;
-// }
+    std::ofstream fout("metrics.csv");
+    std::cout<<"Writing metrics to metrics.csv\n";
+    if (!fout) {
+        std::cerr << "Error opening metrics.csv for writing\n";
+        return;
+    }
+    fout << "Algorithm,Response,Turnaround,Waiting\n";
+    for (auto &m : all) {
+        std::cout << m.name << "," << m.resp << "," << m.tat << "," << m.wait << "\n";
+        fout << m.name << "," << m.resp << "," << m.tat << "," << m.wait << "\n";
+    }
+
+    // int ret = std::system(R"(python "C:\Users\DELL\thread-scheduler\plot_metrics.py")");
+    // std::cout << "return code: " << ret << "\n";
+    // if (ret != 0) {
+    //     std::cerr << "ERROR: plotting script returned code " << ret << "\n";
+    // }
+}
