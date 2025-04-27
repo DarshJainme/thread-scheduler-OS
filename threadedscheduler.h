@@ -6,8 +6,6 @@
 #include <string>
 #include <functional>
 #include "ult_sync.h" 
-
-// Available scheduling algorithms
 enum ThreadedAlgorithm {
     T_FCFS,
     T_RR,
@@ -16,15 +14,12 @@ enum ThreadedAlgorithm {
     T_CFS
 };
 
-// Represents a user-level thread task
 struct ThreadedTask {
     int id;               // Task identifier
     int priority;         // Dynamic priority
     int remaining_time;   // Remaining work (ms)
     int queue_level;         // Current MLFQ level (0 = highest)
     int time_run_in_level;   // Time consumed in current level
-
-    // CFS-specific fields
     double vruntime;         // Virtual runtime
     double weight;           // Weight based on niceness
     ThreadedTask(int i, int p, int r)
@@ -32,14 +27,12 @@ struct ThreadedTask {
         vruntime(0.0), weight(1.0) {}
 };
 
-// Records one slice of execution by a task
 struct ThreadedTimelineEntry {
     int task_id;
     int start_time;
     int end_time;
 };
 
-// User-Level Thread Scheduler class
 typedef std::function<void(const std::string&)> Logger;
 
 class ThreadedScheduler {
