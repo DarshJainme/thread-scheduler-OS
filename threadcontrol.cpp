@@ -1,29 +1,19 @@
-// File: threadcontrol.cpp — user‐level thread control for ULT scheduler
+
 #include "threadcontrol.h"
+#include <windows.h>
 #include <vector>
 #include <cstddef>
-
-#include "ucontext_stubs.h"
-// Externs from the ULT scheduler:
-extern ucontext_t sched_ctx;
+#include "ult_context.h"
+extern void* scheduler_fiber;
 extern size_t g_current_idx;
 extern std::vector<ULTContext> g_contexts;
 
-ThreadControl::ThreadControl() {
-    // nothing to initialize for ULT
-}
-
 void ThreadControl::waitUntilRunnable() {
-    // Park this ULT: save its context and switch back to scheduler
-    swapcontext(&g_contexts[g_current_idx].ctx, &sched_ctx);
-}
-
-void ThreadControl::wake() {
-    // No operation: scheduler resumes the ULT by swapping contexts
+    // Save context by switching back to the scheduler fiber
+    SwitchToFiber(scheduler_fiber);
 }
 
 void ThreadControl::finish() {
-    // Mark this ULT as finished so its trampoline can exit
     g_contexts[g_current_idx].finished = true;
 }
 

@@ -1,37 +1,46 @@
-#ifndef ULT_SYNC_H
-#define ULT_SYNC_H
+#pragma once
+#include "ult_context.h"
 
-#include <vector>
-#include <deque>
-#include <cstddef>
-#include "ucontext_stubs.h"
-
-// Externals from scheduler
-extern ucontext_t sched_ctx;
-extern std::deque<size_t> ready_queue;      // indices of runnable ULTs (using deque)
-extern size_t g_current_idx;
-extern std::vector<ULTContext> g_contexts;
-
-// User-Level Mutex
 class ULTMutex {
 public:
-    ULTMutex() : locked(false) {}
-    void lock();
-    void unlock();
+  void lock() {
+    if (!locked) { locked = true; return; }
+    waiters.push_back(g_current_idx);
+    ::SwitchToFiber(scheduler_fiber);
+    // when we return here, the lock has been granted
+  }
+  void unlock() {
+    if (waiters.empty()) locked = false;
+    else {
+      auto next = waiters.front(); waiters.pop_front();
+      ready_queue.push_back(next);
+    }
+  }
 private:
-    bool locked;
-    std::deque<size_t> waiters;  // ULT indices waiting on this mutex
+  bool locked = false;
+  std::deque<std::size_t> waiters;
 };
 
-// User-Level Condition Variable
 class ULTCondVar {
 public:
-    ULTCondVar() {}
-    void wait(ULTMutex &m);
-    void signal();
-    void broadcast();
+  void wait(ULTMutex &m) {
+    waiters.push_back(g_current_idx);
+    m.unlock();
+    ::SwitchToFiber(scheduler_fiber);
+    m.lock();
+  }
+  void signal() {
+    if (!waiters.empty()) {
+      auto idx = waiters.front(); waiters.pop_front();
+      ready_queue.push_back(idx);
+    }
+  }
+  void broadcast() {
+    while (!waiters.empty()) {
+      auto idx = waiters.front(); waiters.pop_front();
+      ready_queue.push_back(idx);
+    }
+  }
 private:
-    std::deque<size_t> waiters;  // ULT indices waiting on this condvar
+  std::deque<std::size_t> waiters;
 };
-
-#endif

@@ -3,35 +3,27 @@
 
 #include <cstddef>
 #include <vector>
-#include "ucontext_stubs.h"  // Include the fake ucontext_t definition
+#include "ult_context.h" // Include for ULTContext struct definition
 
-// Forward-declared scheduler context globals
-extern ucontext_t sched_ctx;
+// Forward declarations of global variables used by the Fiber-based ULT system
+extern void* scheduler_fiber;
 extern size_t g_current_idx;
-
-// User-level thread context structure
-// struct ULTContext {
-//     ucontext_t ctx; // Using the simulated ucontext_t from ucontext_stubs.h
-//     void* stack;    // Pointer to stack (for simulation)
-//     bool finished;
-// };
-
 extern std::vector<ULTContext> g_contexts;
 
 class ThreadControl {
 public:
     ThreadControl();
 
-    // Called inside a ULT: yields to scheduler until resumed
+    // Called inside a ULT: yields control to the scheduler until resumed
     void waitUntilRunnable();
 
-    // No-op for ULT: scheduler directly swaps in
+    // No-op for ULT: the scheduler will resume it explicitly
     void wake();
 
-    // Signal that this ULT should terminate
+    // Mark this ULT as finished
     void finish();
 
-    // Check if finish() has been called for this ULT
+    // Check if the current ULT has finished execution
     bool isFinished() const;
 };
 

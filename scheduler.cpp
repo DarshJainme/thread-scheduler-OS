@@ -488,14 +488,14 @@ void Scheduler::runCFS()
     size_t next = 0;
     size_t n = tasks.size();
 
-    // we use a vector to hold the tasks in order of arrival time
+    // we use vector to hold the tasks in order of arrival time
     std::vector<Task *> upcoming;
     upcoming.reserve(n);
     for (auto &tk : tasks)
         upcoming.push_back(&tk);
 
-    // we use an unordered_map to keep track of the virtual runtime of each task
-    // this is a mapping of task pointer to its virtual runtime
+
+    // this is a mapping of task pointer to virtual runtime
     std::unordered_map<Task *, double> vruntime;
 
     // pick smallest vruntime, tie-break on id
@@ -507,7 +507,7 @@ void Scheduler::runCFS()
         return a->id < b->id;
     };
 
-    // we use a multiset (which is implemented using a red-black tree) to keep track of the tasks in order of vruntime
+    // we use  multiset (rbt)
     std::multiset<Task *, decltype(cmp)> rq(cmp);
 
     while (next < n && upcoming[next]->arrival_time <= t)

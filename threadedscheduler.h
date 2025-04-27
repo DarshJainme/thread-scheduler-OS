@@ -5,20 +5,20 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "ult_sync.h"
-#include "ucontext_stubs.h"
+#include "ult_context.h"    
+#include "ult_sync.h"      
 
 enum ThreadedAlgorithm {
-    T_FCFS,     
-    T_RR, 
+    T_FCFS,
+    T_RR,
     T_PRIORITY,
-    T_MLFQ, 
+    T_MLFQ,
     T_CFS
 };
 
 enum class ThreadState { NEW, READY, RUNNING, FINISHED };
 
-// the user-level thread task structure
+// user‐level thread/task
 struct ThreadedTask {
     int id;
     int priority;
@@ -28,14 +28,16 @@ struct ThreadedTask {
     int time_run_in_level;
     double vruntime;
     double weight;
+    int nice;
     ThreadState state;
-
+  
     ThreadedTask(int i, int p, int r, int arr)
         : id(i), priority(p), arrival_time(arr), remaining_time(r),
           queue_level(0), time_run_in_level(0), vruntime(0.0),
-          weight(1.0), state(ThreadState::NEW) {}
+          weight(1.0), nice(1), state(ThreadState::NEW) {}
 };
 
+// for recording run timeline
 struct ThreadedTimelineEntry {
     int id;
     int start_time;
@@ -43,8 +45,8 @@ struct ThreadedTimelineEntry {
     ThreadState state;
     int arrival_time;
 
-    ThreadedTimelineEntry(int id, int start, int end, ThreadState state, int arrival_time)
-        : id(id), start_time(start), end_time(end), state(state), arrival_time(arrival_time) {}
+    ThreadedTimelineEntry(int id_, int s, int e, ThreadState st, int arr)
+        : id(id_), start_time(s), end_time(e), state(st), arrival_time(arr) {}
 };
 
 typedef std::function<void(const std::string&)> Logger;
@@ -53,26 +55,25 @@ class ThreadedScheduler {
 public:
     ThreadedScheduler(ThreadedAlgorithm algo, int tq = 100, Logger log = nullptr);
 
+    // run chosen scheduling algorithm
     void run();
     const std::vector<ThreadedTimelineEntry>& timeline() const;
-    const std::vector<std::unique_ptr<ThreadedTask>>& get_tasks() const;
+    const std::vector<std::unique_ptr<ThreadedTask>>& get_tasks() const { return tasks; }
 
-    ThreadedAlgorithm algorithm;   
-    int time_quantum;              
-    Logger logger;                     
-
-    // Internal data structures
-    std::vector<std::unique_ptr<ThreadedTask>> tasks; 
+    // algorithm para.
+    ThreadedAlgorithm algorithm;
+    int time_quantum;
+    Logger logger;
+    std::vector<std::unique_ptr<ThreadedTask>> tasks;
     std::vector<ThreadedTimelineEntry> _timeline;
 
-    // Helper methods
-    void log(const std::string& msg);       
-    void runFCFS();                          
-    void runRR();                            
-    void runPriority();                      
-    void runCFS();                          
-    void runMLFQ();                         
+private:
+    void log(const std::string& msg);
+    void runFCFS();
+    void runRR();
+    void runPriority();
+    void runMLFQ();
+    void runCFS();
 };
 
-
-#endif 
+#endif // THREADEDSCHEDULER_H

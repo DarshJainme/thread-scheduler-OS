@@ -25,10 +25,10 @@ add_executable(SchedulerGUI
     threadedscheduler.h
     ganttwidget.cpp
     ganttwidget.h
-    ult_sync.cpp
     ult_sync.h
     analysis.h
     analysis.cpp
+    ult_context.h
 )
 
 
