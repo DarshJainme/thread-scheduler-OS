@@ -1,4 +1,4 @@
-// mainwindow.cpp (updated for Basic and Threaded Schedulers tabs)
+// mainwindow.cpp
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QString>

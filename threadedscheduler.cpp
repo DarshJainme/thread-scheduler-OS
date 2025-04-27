@@ -1,8 +1,3 @@
-// File: threadscheduler.cpp
-// -------------------------
-// Windows Fiber–based User‐Level Thread Scheduler
-// -------------------------
-
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -12,13 +7,12 @@
 #include <iostream>
 #include <queue>
 #include <numeric>
-#include "ult_context.h"     // ULTContext, scheduler_fiber, g_contexts, g_current_idx, ready_queue
-#include "ult_sync.h"        // ULTMutex, ULTCondVar
-#include "threadedscheduler.h" // ThreadedScheduler, ThreadedTask, TimelineEntry
-#include <QDebug>    // for qFatal(), qWarning(), etc.
-// -----------------------------------
-// Global scheduler data (defined here)
-// -----------------------------------
+#include "ult_context.h"  
+#include "ult_sync.h"
+#include "threadedscheduler.h" 
+#include <QDebug>   
+
+
 LPVOID scheduler_fiber = nullptr;
 std::vector<ULTContext> g_contexts;
 size_t g_current_idx = 0;
@@ -30,18 +24,15 @@ static ULTCondVar shared_cv;
 static bool data_ready = false;
 static int shared_counter = 0;
 
-// -----------------------------
-// Trampoline for each ULT
-// -----------------------------
+
 static void __stdcall task_trampoline(void* arg) {
     size_t idx = reinterpret_cast<size_t>(arg);
     ULTContext& ctx = g_contexts[idx];
     auto& tk = g_sched_ptr->tasks[idx];
 
-    // 1) initial handshake: yield back so scheduler records start
+    // initial handshake: yield back so scheduler records start
     SwitchToFiber(scheduler_fiber);
 
-    // 2) optional barrier: all threads wait until idx==0 ready
     if (idx == 0) {
         shared_mtx.lock();
         data_ready = true;
@@ -53,16 +44,15 @@ static void __stdcall task_trampoline(void* arg) {
         shared_mtx.unlock();
     }
 
-    // 3) main loop: run until finished flag set by scheduler
+    // run until finished flag set by scheduler
     while (!ctx.finished) {
         std::cout << "[ULT " << tk->id << "] slice start" << std::endl;
 
-        // ---- CRITICAL SECTION ----
+        // CRITICAL SECTION
         shared_mtx.lock();
         ++shared_counter;
         std::cout << " [shared_counter=" << shared_counter << "]" << std::endl;
         shared_mtx.unlock();
-        // ---------------------------
 
         // simulate work
         Sleep(30);
@@ -73,16 +63,13 @@ static void __stdcall task_trampoline(void* arg) {
         SwitchToFiber(scheduler_fiber);
     }
 
-    // 4) final handshake: notify scheduler of exit
+    // notify scheduler of exit
     SwitchToFiber(scheduler_fiber);
 }
 
-// -----------------------------
 // Build ULT contexts (fibers)
-// -----------------------------
 static void setup_contexts(ThreadedScheduler* sched) {
     g_sched_ptr = sched;
-    // Remove ConvertThreadToFiber: done in main(), not here
 
     size_t n = sched->tasks.size();
     g_contexts.resize(n);
@@ -100,23 +87,18 @@ static void setup_contexts(ThreadedScheduler* sched) {
     }
 }
 
-// -----------------------------
 // Helper to schedule one slice
-// -----------------------------
 inline void schedule_slice(size_t idx) {
     g_current_idx = idx;
     // switch into the ULT’s fiber
     SwitchToFiber(g_contexts[idx].fiber);
 }
 
-// --------------------------------
-// ThreadedScheduler Methods
-// --------------------------------
 ThreadedScheduler::ThreadedScheduler(ThreadedAlgorithm algo,
                                      int tq,
                                      Logger log)
     : algorithm(algo), time_quantum(tq), logger(log) {
-    // example tasks; replace with dynamic input if needed
+
     tasks.emplace_back(std::make_unique<ThreadedTask>(1, 5, 200, 0));
     tasks.emplace_back(std::make_unique<ThreadedTask>(2, 3, 150, 50));
     tasks.emplace_back(std::make_unique<ThreadedTask>(3, 8, 300, 100));
@@ -157,7 +139,7 @@ void ThreadedScheduler::run() {
 void ThreadedScheduler::runFCFS() {
     log("[FCFS] starting");
     
-    // 0) initial dispatch into first ULT
+    // initial dispatch into first ULT
     schedule_slice(0);
 
     // sort by arrival
@@ -191,7 +173,7 @@ void ThreadedScheduler::runFCFS() {
 
 void ThreadedScheduler::runRR() {
     log("[RR] starting");
-    // 0) initial dispatch into first ULT
+    // initial dispatch into first ULT
     schedule_slice(0);
     int current_time = 0;
     std::queue<size_t> q;
@@ -234,45 +216,80 @@ void ThreadedScheduler::runRR() {
 
 void ThreadedScheduler::runPriority() {
     log("[PRIORITY] starting");
-    // Priority: higher number = higher priority, non-preemptive within quantum
-        // 0) initial dispatch into first ULT
-        schedule_slice(0);
+    // initial dispatch into first ULT
+    schedule_slice(0);
+
     int current_time = 0;
+    const int AGING_INTERVAL = time_quantum; // age tasks every quantum
+    const int AGING_INCREMENT = 1;         // increase priority by 1 each interval
+
+    // copy of original priorities to avoid unbounded growth
+    std::vector<int> base_prio(tasks.size());
+    for (size_t i = 0; i < tasks.size(); ++i) {
+        base_prio[i] = tasks[i]->priority;
+    }
+
+    // track waiting time
+    std::vector<int> wait_time(tasks.size(), 0);
     bool any;
     do {
         any = false;
+        // age waiting tasks
+        for (size_t i = 0; i < tasks.size(); ++i) {
+            auto& tk = tasks[i];
+            if (tk->arrival_time <= current_time && tk->remaining_time > 0) {
+                // increment wait time
+                wait_time[i] += AGING_INTERVAL;
+                // if waited at least one interval, boost priority
+                if (wait_time[i] >= AGING_INTERVAL) {
+                    tasks[i]->priority += AGING_INCREMENT;
+                    wait_time[i] = 0;
+                }
+            }
+        }
+
         // pick highest-priority ready task
         size_t best_idx = 0;
         int best_prio = -1;
         for (size_t i = 0; i < tasks.size(); ++i) {
             auto& tk = tasks[i];
-            if (tk->arrival_time <= current_time && tk->remaining_time > 0 && tk->priority > best_prio) {
-                best_prio = tk->priority;
-                best_idx = i;
+            if (tk->arrival_time <= current_time && tk->remaining_time > 0) {
                 any = true;
+                if (tk->priority > best_prio) {
+                    best_prio = tk->priority;
+                    best_idx = i;
+                }
             }
         }
-        if (!any) { current_time++; continue; }
+        if (!any) {
+            current_time++;
+            continue;
+        }
+
         auto& tk = tasks[best_idx];
         tk->state = ThreadState::RUNNING;
         int run = std::min(tk->remaining_time, time_quantum);
         _timeline.emplace_back(tk->id, current_time, current_time + run, tk->state, tk->arrival_time);
         schedule_slice(best_idx);
+
         tk->remaining_time -= run;
         current_time += run;
         if (tk->remaining_time <= 0) {
             tk->state = ThreadState::FINISHED;
             g_contexts[best_idx].finished = true;
+            // restore priority (optional)
+            tasks[best_idx]->priority = base_prio[best_idx];
         } else {
             tk->state = ThreadState::READY;
         }
     } while (any);
+
     log("[PRIORITY] done");
 }
 
 void ThreadedScheduler::runMLFQ() {
     log("[MLFQ] starting");
-        // 0) initial dispatch into first ULT
+        // initial dispatch into first ULT
         schedule_slice(0);
     int current_time = 0;
     // Three levels: 0 (high) to 2 (low)
@@ -323,10 +340,9 @@ void ThreadedScheduler::runMLFQ() {
 void ThreadedScheduler::runCFS() {
     log("[CFS] starting");
 
-    // 0) Initialize vruntime & weights, and initial dispatch
+    //Initialize vruntime & weights, and initial dispatch
     const double DEFAULT_WEIGHT = 1024.0;
     for (auto &tk_ptr : tasks) {
-        // weight ∝ 1 / (1 << nice)
         tk_ptr->weight   = DEFAULT_WEIGHT / (1 << tk_ptr->nice);
         tk_ptr->vruntime = 0.0;
         tk_ptr->state    = ThreadState::NEW;
@@ -336,15 +352,12 @@ void ThreadedScheduler::runCFS() {
     int current_time = 0;
     int remaining    = static_cast<int>(tasks.size());
 
-    // 1) Build an empty min‑heap (smallest vruntime on top)
     auto cmp = [&](size_t a, size_t b) {
         return tasks[a]->vruntime > tasks[b]->vruntime;
     };
     std::priority_queue<size_t, std::vector<size_t>, decltype(cmp)> run_queue(cmp);
 
-    // 2) Main loop
     while (remaining > 0) {
-        // 2a) Enqueue any tasks that have arrived and are not yet enqueued
         for (size_t i = 0; i < tasks.size(); ++i) {
             auto &tk = tasks[i];
             if (tk->arrival_time <= current_time
@@ -356,22 +369,18 @@ void ThreadedScheduler::runCFS() {
             }
         }
 
-        // 2b) If no one is ready, advance time
         if (run_queue.empty()) {
             ++current_time;
             continue;
         }
 
-        // 2c) Pick the ULT with the smallest vruntime
         size_t idx = run_queue.top();
         run_queue.pop();
         auto &tk = tasks[idx];
 
-        // 3) Run it for up to one time quantum
         tk->state = ThreadState::RUNNING;
         int slice = std::min(tk->remaining_time, time_quantum);
 
-        // 4) Record timeline before switching
         _timeline.emplace_back(
             tk->id,
             current_time,
@@ -380,19 +389,14 @@ void ThreadedScheduler::runCFS() {
             tk->arrival_time
         );
 
-        // 5) Context switch into the fiber
         schedule_slice(idx);
 
-        // 6) On return, update accounting
         tk->remaining_time -= slice;
         current_time       += slice;
 
-        // 7) Update its virtual runtime
-        //    vdelta = actual_time * (DEFAULT_WEIGHT / weight)
         double vdelta = slice * (DEFAULT_WEIGHT / tk->weight);
         tk->vruntime += vdelta;
 
-        // 8) Finished or re‑enqueue?
         if (tk->remaining_time <= 0) {
             tk->state               = ThreadState::FINISHED;
             g_contexts[idx].finished = true;

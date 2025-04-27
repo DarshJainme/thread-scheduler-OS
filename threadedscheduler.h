@@ -60,7 +60,6 @@ public:
     const std::vector<ThreadedTimelineEntry>& timeline() const;
     const std::vector<std::unique_ptr<ThreadedTask>>& get_tasks() const { return tasks; }
 
-    // algorithm para.
     ThreadedAlgorithm algorithm;
     int time_quantum;
     Logger logger;

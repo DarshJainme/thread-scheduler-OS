@@ -9,7 +9,6 @@ extern size_t g_current_idx;
 extern std::vector<ULTContext> g_contexts;
 
 void ThreadControl::waitUntilRunnable() {
-    // Save context by switching back to the scheduler fiber
     SwitchToFiber(scheduler_fiber);
 }
 
