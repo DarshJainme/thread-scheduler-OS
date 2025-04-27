@@ -1,0 +1,11 @@
+[CFS] Starting
+[CFS] T1
+[CFS] T2
+[CFS] T3
+[CFS] T4
+[CFS] T4
+[CFS] T3
+[CFS] T1
+[CFS] T1
+[CFS] T3
+[CFS] Done

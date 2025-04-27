@@ -1,0 +1,9 @@
+[MLFQ] Starting
+[MLFQ] T1 L0
+[MLFQ] T2 L0
+[MLFQ] T3 L0
+[MLFQ] T4 L0
+[MLFQ] T1 L1
+[MLFQ] T3 L1
+[MLFQ] T4 L1
+[MLFQ] Done

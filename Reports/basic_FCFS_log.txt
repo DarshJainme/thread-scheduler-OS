@@ -1,6 +1,0 @@
-[FCFS] Starting
-[FCFS] T1 0->250
-[FCFS] T2 250->400
-[FCFS] T3 420->720
-[FCFS] T4 720->870
-[FCFS] Done

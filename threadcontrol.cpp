@@ -1,13 +1,12 @@
 // File: threadcontrol.cpp — user‐level thread control for ULT scheduler
 #include "threadcontrol.h"
-#include <ucontext.h>
 #include <vector>
 #include <cstddef>
 
+#include "ucontext_stubs.h"
 // Externs from the ULT scheduler:
 extern ucontext_t sched_ctx;
 extern size_t g_current_idx;
-struct ULTContext { ucontext_t ctx; bool finished; };
 extern std::vector<ULTContext> g_contexts;
 
 ThreadControl::ThreadControl() {

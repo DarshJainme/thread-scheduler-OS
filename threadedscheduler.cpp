@@ -1,31 +1,32 @@
-// File: threadedscheduler.cpp — ULT-based scheduler implementation with mutex & condvar
+//threadscheduler.h
 #include "threadedscheduler.h"
 #include "ult_sync.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <ucontext.h>
 #include <vector>
 #include <cstring>
 #include <time.h>
+#include <queue>
+#pragma once
+
+int getcontext(ucontext_t*) ;
+int setcontext(const ucontext_t*) ;
+void makecontext(ucontext_t*, void (*)(void), int, ...) ;
+int swapcontext(ucontext_t*, const ucontext_t*) ;
 
 // Constants
-static const int STACK_SIZE = 64 * 1024;
+// Somewhere in threadedscheduler.h
+
 
 // User-level synchronization primitives
 static ULTMutex shared_mtx;
 static ULTCondVar shared_cv;
 static bool data_ready = false;
-
 // Simulated shared resource
 static int shared_counter = 0;
 
 // ULT context structure
-struct ULTContext {
-    ucontext_t ctx;
-    char stack[STACK_SIZE];
-    bool finished;
-};
 
 // Scheduler globals
 ucontext_t sched_ctx;
@@ -34,10 +35,10 @@ std::vector<ULTContext> g_contexts;
 size_t g_current_idx = 0;
 
 // Trampoline function for each ULT
-template<typename Func>
 static void task_trampoline(uintptr_t idx) {
     ULTContext& c = g_contexts[idx];
     auto& tk = g_sched_ptr->tasks[idx];
+
     // Initial yield to scheduler
     swapcontext(&c.ctx, &sched_ctx);
 
@@ -67,7 +68,7 @@ static void task_trampoline(uintptr_t idx) {
         shared_counter += 1;
         shared_mtx.unlock();
 
-        struct timespec ts{0, 30 * 1000000};
+        struct timespec ts{0, 30 * 1000000}; // Sleep for 30ms
         nanosleep(&ts, nullptr);
 
         std::cout << "[Thread " << tk->id
@@ -88,32 +89,36 @@ static void task_trampoline(uintptr_t idx) {
 static void setup_contexts(ThreadedScheduler* sched) {
     g_sched_ptr = sched;
     size_t n = sched->tasks.size();
-    g_contexts.clear();
-    g_contexts.resize(n);
+    g_contexts.assign(n, ULTContext{});
+
     for (size_t i = 0; i < n; ++i) {
         ULTContext& c = g_contexts[i];
         c.finished = false;
+
         getcontext(&c.ctx);
-        c.ctx.uc_stack.ss_sp = c.stack;
-        c.ctx.uc_stack.ss_size = sizeof(c.stack);
-        c.ctx.uc_link = &sched_ctx;
-        makecontext(&c.ctx, (void(*)())task_trampoline<void>, 1, (uintptr_t)i);
+        c.ctx.uc_stack.ss_sp   = c.stack_mem;
+        c.ctx.uc_stack.ss_size = sizeof(c.stack_mem);
+        c.ctx.uc_link          = &sched_ctx;
+
+        makecontext(&c.ctx, (void(*)())task_trampoline, 1, (uintptr_t)i);
     }
 }
 
 // Run one ULT slice
-inline void run_ult_slice(size_t idx, int /*run*/) {
+inline void run_ult_slice(size_t idx, int run_time) {
     g_current_idx = idx;
     swapcontext(&sched_ctx, &g_contexts[idx].ctx);
 }
 
 // Constructor
-ThreadedScheduler::ThreadedScheduler(ThreadedAlgorithm algo, int tq, std::function<void(const std::string&)> log)
+ThreadedScheduler::ThreadedScheduler(ThreadedAlgorithm algo, int tq, std::function<void(const std::string&)>
+    log)
     : algorithm(algo), time_quantum(tq), logger(log) {
-    tasks.emplace_back(std::make_unique<ThreadedTask>(1, 15, 250));
-    tasks.emplace_back(std::make_unique<ThreadedTask>(2, 5, 100));
-    tasks.emplace_back(std::make_unique<ThreadedTask>(3, 20, 300));
-    tasks.emplace_back(std::make_unique<ThreadedTask>(4, 10, 150));
+    // Hardcoded tasks
+    tasks.emplace_back(std::make_unique<ThreadedTask>(1, 8, 250, 0));
+    tasks.emplace_back(std::make_unique<ThreadedTask>(2, 13, 100, 100));
+    tasks.emplace_back(std::make_unique<ThreadedTask>(3, 19, 300, 220));
+    tasks.emplace_back(std::make_unique<ThreadedTask>(4, 21, 150, 500));
 }
 
 void ThreadedScheduler::log(const std::string& msg) {
@@ -132,24 +137,35 @@ void ThreadedScheduler::run() {
         case T_FCFS:    runFCFS();    break;
         case T_RR:      runRR();      break;
         case T_PRIORITY:runPriority();break;
-        case T_MLFQ:     runMLFQ();   break;
-        case T_CFS:      runCFS();    break;
+        case T_MLFQ:    runMLFQ();    break;
+        case T_CFS:     runCFS();     break;
     }
 }
 
 void ThreadedScheduler::runFCFS() {
     log("[T-FCFS] Starting");
     int t = 0;
-    for (size_t i = 0; i < tasks.size(); ++i) {
-        auto& tk = tasks[i];
+    // Sort tasks by arrival_time
+    std::vector<size_t> order(tasks.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return tasks[a]->arrival_time < tasks[b]->arrival_time;
+    });
+    for (auto idx : order) {
+        auto& tk = tasks[idx];
+        // Wait for arrival
+        if (t < tk->arrival_time) t = tk->arrival_time;
+        tk->state = ThreadState::RUNNING;
         int s = t;
         int e = s + tk->remaining_time;
-        _timeline.push_back({tk->id, s, e});
-        log("[T-FCFS] Task " + std::to_string(tk->id) + " " + std::to_string(s) + "->" + std::to_string(e));
-        run_ult_slice(i, tk->remaining_time);
+        _timeline.push_back({tk->id, s, e, tk->state, tk->arrival_time});
+        log("[T-FCFS] Task " + std::to_string(tk->id) + ", arrival=" + std::to_string(tk->arrival_time) + ", "
+            + std::to_string(s) + "->" + std::to_string(e));
+        run_ult_slice(idx, tk->remaining_time);
         t = e;
-        g_contexts[i].finished = true;
-        swapcontext(&sched_ctx, &g_contexts[i].ctx);
+        tk->state = ThreadState::FINISHED;
+        g_contexts[idx].finished = true;
+        swapcontext(&sched_ctx, &g_contexts[idx].ctx);
     }
     log("[T-FCFS] Done");
 }
@@ -162,111 +178,117 @@ void ThreadedScheduler::runRR() {
         work_left = false;
         for (size_t i = 0; i < tasks.size(); ++i) {
             auto& tk = tasks[i];
-            if (tk->remaining_time > 0) {
-                work_left = true;
-                int run = std::min(tk->remaining_time, time_quantum);
-                int s = t;
-                int e = s + run;
-                _timeline.push_back({tk->id, s, e});
-                log("[T-RR] Task " + std::to_string(tk->id) + " " + std::to_string(s) + "->" + std::to_string(e));
-                run_ult_slice(i, run);
-                tk->remaining_time -= run;
-                t = e;
-                if (tk->remaining_time <= 0) {
-                    g_contexts[i].finished = true;
-                    swapcontext(&sched_ctx, &g_contexts[i].ctx);
-                }
+            if (tk->arrival_time > t || tk->remaining_time <= 0) continue;
+            work_left = true;
+            tk->state = ThreadState::RUNNING;
+            int run = std::min(tk->remaining_time, time_quantum);
+            int s = t;
+            int e = s + run;
+            _timeline.push_back({tk->id, s, e, tk->state, tk->arrival_time});
+            log("[T-RR] Task " + std::to_string(tk->id)
+                + ", arrival=" + std::to_string(tk->arrival_time)
+                + ", " + std::to_string(s) + "->" + std::to_string(e));
+            run_ult_slice(i, run);
+            tk->remaining_time -= run;
+            t = e;
+            if (tk->remaining_time <= 0) {
+                tk->state = ThreadState::FINISHED;
+                g_contexts[i].finished = true;
+                swapcontext(&sched_ctx, &g_contexts[i].ctx);
+            } else {
+                tk->state = ThreadState::READY;
             }
         }
     }
     log("[T-RR] Done");
 }
 
+// Continue for other scheduling algorithms
 void ThreadedScheduler::runPriority() {
     log("[T-PRIORITY] Starting");
     int t = 0;
-    const int FF = 50, AG = 1;
-    size_t done = 0;
-    while (done < tasks.size()) {
-        std::vector<size_t> order;
-        for (size_t i = 0; i < tasks.size(); ++i)
-            if (!g_contexts[i].finished) order.push_back(i);
-        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-            return tasks[a]->priority > tasks[b]->priority;
+    bool work_left = true;
+    while (work_left) {
+        work_left = false;
+
+        // Sort tasks based on priority (higher priority should be executed first)
+        std::sort(tasks.begin(), tasks.end(), [&](const std::unique_ptr<ThreadedTask>& a, const std::unique_ptr<ThreadedTask>& b) {
+            return a->priority > b->priority;  // Adjust sorting based on priority
         });
-        size_t idx = order.front();
-        auto& tk = tasks[idx];
-        int run = std::min(tk->remaining_time, time_quantum);
-        int s = t;
-        int e = s + run;
-        _timeline.push_back({tk->id, s, e});
-        log("[T-PRIORITY] Task " + std::to_string(tk->id) + " pr=" + std::to_string(tk->priority));
-        run_ult_slice(idx, run);
-        tk->remaining_time -= run;
-        t = e;
-        int dec = run / FF;
-        tk->priority = std::max(1, tk->priority - dec);
-        for (auto j : order) if (j != idx) tasks[j]->priority += AG;
-        if (tk->remaining_time <= 0) {
-            g_contexts[idx].finished = true;
-            swapcontext(&sched_ctx, &g_contexts[idx].ctx);
-            ++done;
+
+        for (size_t i = 0; i < tasks.size(); ++i) {
+            auto& tk = tasks[i];
+
+            if (tk->arrival_time > t || tk->remaining_time <= 0) continue;
+
+            work_left = true;
+            tk->state = ThreadState::RUNNING;
+            int run = std::min(tk->remaining_time, time_quantum);
+            int s = t;
+            int e = s + run;
+            _timeline.push_back({tk->id, s, e, tk->state, tk->arrival_time});
+            log("[T-PRIORITY] Task " + std::to_string(tk->id)
+                + ", arrival=" + std::to_string(tk->arrival_time)
+                + ", " + std::to_string(s) + "->" + std::to_string(e));
+            run_ult_slice(i, run);
+            tk->remaining_time -= run;
+            t = e;
+            if (tk->remaining_time <= 0) {
+                tk->state = ThreadState::FINISHED;
+                g_contexts[i].finished = true;
+                swapcontext(&sched_ctx, &g_contexts[i].ctx);
+            } else {
+                tk->state = ThreadState::READY;
+            }
         }
     }
     log("[T-PRIORITY] Done");
 }
+
 void ThreadedScheduler::runMLFQ() {
     log("[T-MLFQ] Starting");
-    const int MAX_LEVELS = 3;
-    const int boost_interval = 500; // ms
     int t = 0;
-    int since_boost = 0;
-
-    // Initialize all tasks to top queue
-    for (auto& tk_uptr : tasks) {
-        auto& tk = *tk_uptr;
-        tk->queue_level = 0;
-        tk->time_run_in_level = 0;
-    }
-
     bool work_left = true;
+    std::vector<std::queue<size_t>> queues(3);  // Priority levels (0, 1, 2) for MLFQ
+
     while (work_left) {
         work_left = false;
-        // Boost priorities periodically
-        if (since_boost >= boost_interval) {
-            for (auto& tk_uptr : tasks) {
-                auto& tk = *tk_uptr;
-                tk->queue_level = 0;
-                tk->time_run_in_level = 0;
-            }
-            since_boost = 0;
-            log("[T-MLFQ] Priority boost");
-        }
-        // Serve queues from highest to lowest
-        for (int lvl = 0; lvl < MAX_LEVELS; ++lvl) {
-            for (size_t i = 0; i < tasks.size(); ++i) {
-                auto& tk = *tasks[i];
-                if (tk.remaining_time > 0 && tk.queue_level == lvl) {
-                    work_left = true;
-                    int qtime = time_quantum << lvl; // larger quanta for lower queues
-                    int run = std::min(tk.remaining_time, qtime - tk.time_run_in_level);
-                    int s = t, e = s + run;
-                    _timeline.push_back({tk.id, s, e});
-                    log("[T-MLFQ] Task " + std::to_string(tk.id) + " lvl=" + std::to_string(lvl));
-                    run_ult_slice(i, run);
-                    tk.remaining_time -= run;
-                    tk.time_run_in_level += run;
+        for (size_t i = 0; i < tasks.size(); ++i) {
+            auto& tk = tasks[i];
+            if (tk->arrival_time > t || tk->remaining_time <= 0) continue;
+
+            work_left = true;
+
+            // Add tasks to appropriate queue based on remaining time (short tasks get high priority)
+            int priority = (tk->remaining_time > 100) ? 2 : (tk->remaining_time > 50) ? 1 : 0;
+            queues[priority].push(i);
+
+            tk->state = ThreadState::RUNNING;
+
+            // Process tasks from highest priority to lowest
+            for (int priority_level = 0; priority_level < 3; ++priority_level) {
+                if (!queues[priority_level].empty()) {
+                    size_t idx = queues[priority_level].front();
+                    queues[priority_level].pop();
+                    auto& task = tasks[idx];
+                    int run = std::min(task->remaining_time, time_quantum);
+                    int s = t;
+                    int e = s + run;
+                    _timeline.push_back({task->id, s, e, task->state, task->arrival_time});
+                    log("[T-MLFQ] Task " + std::to_string(task->id)
+                        + ", arrival=" + std::to_string(task->arrival_time)
+                        + ", " + std::to_string(s) + "->" + std::to_string(e));
+                    run_ult_slice(idx, run);
+                    task->remaining_time -= run;
                     t = e;
-                    since_boost += run;
-                    // Demote if quantum exhausted
-                    if (tk.time_run_in_level >= qtime && lvl < MAX_LEVELS - 1) {
-                        tk.queue_level++;
-                        tk.time_run_in_level = 0;
+                    if (task->remaining_time <= 0) {
+                        task->state = ThreadState::FINISHED;
+                        g_contexts[idx].finished = true;
+                        swapcontext(&sched_ctx, &g_contexts[idx].ctx);
+                    } else {
+                        task->state = ThreadState::READY;
                     }
-                    if (tk.remaining_time <= 0) {
-                        g_contexts[i].finished = true;
-                        swapcontext(&sched_ctx, &g_contexts[i].ctx);
-                    }
+                    break;
                 }
             }
         }
@@ -274,41 +296,48 @@ void ThreadedScheduler::runMLFQ() {
     log("[T-MLFQ] Done");
 }
 
-// Completely Fair Scheduler (CFS)
 void ThreadedScheduler::runCFS() {
     log("[T-CFS] Starting");
     int t = 0;
-    // Min-heap by vruntime
-    auto cmp = [&](size_t a, size_t b) {
-        return tasks[a]->vruntime > tasks[b]->vruntime;
-    };
-    std::priority_queue<size_t, std::vector<size_t>, decltype(cmp)> minheap(cmp);
-    for (size_t i = 0; i < tasks.size(); ++i) {
-        if (tasks[i]->remaining_time > 0)
-            minheap.push(i);
-    }
-    while (!minheap.empty()) {
-        size_t idx = minheap.top(); minheap.pop();
-        auto& tk = *tasks[idx];
-        // Calculate timeslice proportional to weight
-        double total_weight = 0;
-        for (auto& up : tasks)
-            if (up->remaining_time > 0) total_weight += up->weight;
-        int slice = std::max(1, int((tk.weight / total_weight) * time_quantum));
-        int run = std::min(tk.remaining_time, slice);
-        int s = t, e = s + run;
-        _timeline.push_back({tk.id, s, e});
-        log("[T-CFS] Task " + std::to_string(tk.id) + " vruntime=" + std::to_string(tk.vruntime));
-        run_ult_slice(idx, run);
-        // Update vruntime = vruntime + run * (1024/weight)
-        tk.vruntime += run * (1024.0 / tk.weight);
-        tk.remaining_time -= run;
-        t = e;
-        if (tk.remaining_time > 0) {
-            minheap.push(idx);
-        } else {
-            g_contexts[idx].finished = true;
-            swapcontext(&sched_ctx, &g_contexts[idx].ctx);
+    bool work_left = true;
+    std::priority_queue<std::pair<int, size_t>> queue;  // Min-heap based on task execution time
+
+    while (work_left) {
+        work_left = false;
+        for (size_t i = 0; i < tasks.size(); ++i) {
+            auto& tk = tasks[i];
+            if (tk->arrival_time > t || tk->remaining_time <= 0) continue;
+
+            work_left = true;
+
+            // Insert task into CFS queue based on remaining execution time (shortest remaining time first)
+            queue.push({-tk->remaining_time, i});
+
+            tk->state = ThreadState::RUNNING;
+
+            // Process tasks with the shortest remaining time
+            if (!queue.empty()) {
+                auto [remaining_time, idx] = queue.top();
+                queue.pop();
+                auto& task = tasks[idx];
+                int run = std::min(task->remaining_time, time_quantum);
+                int s = t;
+                int e = s + run;
+                _timeline.push_back({task->id, s, e, task->state, task->arrival_time});
+                log("[T-CFS] Task " + std::to_string(task->id)
+                    + ", arrival=" + std::to_string(task->arrival_time)
+                    + ", " + std::to_string(s) + "->" + std::to_string(e));
+                run_ult_slice(idx, run);
+                task->remaining_time -= run;
+                t = e;
+                if (task->remaining_time <= 0) {
+                    task->state = ThreadState::FINISHED;
+                    g_contexts[idx].finished = true;
+                    swapcontext(&sched_ctx, &g_contexts[idx].ctx);
+                } else {
+                    task->state = ThreadState::READY;
+                }
+            }
         }
     }
     log("[T-CFS] Done");

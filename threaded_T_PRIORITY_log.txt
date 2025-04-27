@@ -1,0 +1,11 @@
+[T-PRIORITY] Starting
+[T-PRIORITY] Task 3 pr=20
+[T-PRIORITY] Task 3 pr=22
+[T-PRIORITY] Task 3 pr=22
+[T-PRIORITY] Task 1 pr=18
+[T-PRIORITY] Task 1 pr=19
+[T-PRIORITY] Task 1 pr=18
+[T-PRIORITY] Task 4 pr=16
+[T-PRIORITY] Task 4 pr=15
+[T-PRIORITY] Task 2 pr=13
+[T-PRIORITY] Done

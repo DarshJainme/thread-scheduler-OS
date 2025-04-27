@@ -1,0 +1,6 @@
+[MLQ] Starting
+[MLQ] T1 0->250
+[MLQ] T2 250->350
+[MLQ] T3 350->650
+[MLQ] T4 650->800
+[MLQ] Done

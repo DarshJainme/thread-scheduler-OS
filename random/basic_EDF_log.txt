@@ -1,0 +1,11 @@
+[EDF] Starting
+[EDF] T1 dl=0
+[EDF] T1 dl=0
+[EDF] T1 dl=0
+[EDF] T2 dl=0
+[EDF] T3 dl=0
+[EDF] T3 dl=0
+[EDF] T3 dl=0
+[EDF] T4 dl=0
+[EDF] T4 dl=0
+[EDF] Done

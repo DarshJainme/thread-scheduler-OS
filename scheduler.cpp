@@ -21,7 +21,8 @@ Scheduler::Scheduler(Algorithm algo, int tq, function<void(const string&)> lg)
     tasks = {
         {1, 8,   250, 0,   300, 0},
         {2, 13,  100, 100, 350, 0},
-        {3, 19,  300, 220, 600, 0},
+        {3, 19,  300, 400
+         , 600, 0},
         {4, 21,  150, 500, 700, 0}
     };
 }

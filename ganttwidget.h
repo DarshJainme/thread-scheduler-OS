@@ -27,11 +27,11 @@ public:
         QMap<int, int> rows;
         int nextRow = 0;
         for (auto &e : timeline) {
-            if (!rows.contains(e.task_id)) rows[e.task_id] = nextRow++;
-            int r = rows[e.task_id];
+            if (!rows.contains(e.id)) rows[e.id] = nextRow++;
+            int r = rows[e.id];
             int x = e.start_time, w = e.end_time - e.start_time;
             scene->addRect(x, offsetY + r * rowH, w, 20, QPen(), QBrush(Qt::cyan));
-            scene->addSimpleText(QString("T%1").arg(e.task_id))->setPos(x + 2, offsetY + r * rowH);
+            scene->addSimpleText(QString("T%1").arg(e.id))->setPos(x + 2, offsetY + r * rowH);
         }
         scene->setSceneRect(0, 0, 800, offsetY + nextRow * rowH + 50);
     }

@@ -1,0 +1,6 @@
+[SJF] Starting
+[SJF] T2 0->100
+[SJF] T4 100->250
+[SJF] T1 250->500
+[SJF] T3 500->800
+[SJF] Done

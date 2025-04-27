@@ -29,20 +29,16 @@ void MainWindow::on_runButton_clicked() {
     QStringList basicAlgos = {"FCFS", "RR", "PRIORITY", "SJF", "MLQ", "MLFQ", "EDF", "CFS"};
 
     QStringList threadedAlgos = {"T_FCFS", "T_RR", "T_PRIORITY", "T_MLFQ", "T_CFS"};
-
-    // Run Basic Schedulers
     for (int alg = FCFS; alg <= CFS; ++alg) {
         QString name = basicAlgos[alg];
         createAlgoTab(name, ui->basicSchedulerTabs, logs_basic, gantts_basic);
-
+        
         Scheduler s((Algorithm)alg, 100, [=](const std::string &m) {
             logToAlgoTab(name, QString::fromStdString(m), logs_basic);
         });
         s.run();
         gantts_basic[name]->drawTimeline(s.timeline(), name);
     }
-
-    // Run Threaded Schedulers
     for (int alg = T_FCFS; alg <=T_CFS; ++alg) {
         QString name = threadedAlgos[alg];
         createAlgoTab(name, ui->threadedSchedulerTabs, logs_threaded, gantts_threaded);
@@ -53,7 +49,11 @@ void MainWindow::on_runButton_clicked() {
         ts.run();
         gantts_threaded[name]->drawTimeline(ts.timeline(), name);
     }
+    // Run Basic Schedulers
     analyzeAlgorithms();
+
+    // Run Threaded Schedulers
+    
 }
 
 void MainWindow::createAlgoTab(const QString &name, QTabWidget *parentTabs,

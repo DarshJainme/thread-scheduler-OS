@@ -25,7 +25,7 @@ struct Task {
 
 // Single timeline entry: a slice of execution
 struct TimelineEntry {
-    int task_id;
+    int id;
     int start_time;
     int end_time;
 };
@@ -53,7 +53,6 @@ public:
     // Logging utility
     void log(const std::string& msg);
 
-private:
     Algorithm algorithm;
     int time_quantum;
     std::vector<Task> tasks;
