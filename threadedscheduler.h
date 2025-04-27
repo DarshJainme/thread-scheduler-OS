@@ -11,7 +11,9 @@
 enum ThreadedAlgorithm {
     T_FCFS,
     T_RR,
-    T_PRIORITY
+    T_PRIORITY,
+    T_MLFQ,
+    T_CFS
 };
 
 // Represents a user-level thread task
@@ -19,9 +21,15 @@ struct ThreadedTask {
     int id;               // Task identifier
     int priority;         // Dynamic priority
     int remaining_time;   // Remaining work (ms)
+    int queue_level;         // Current MLFQ level (0 = highest)
+    int time_run_in_level;   // Time consumed in current level
 
+    // CFS-specific fields
+    double vruntime;         // Virtual runtime
+    double weight;           // Weight based on niceness
     ThreadedTask(int i, int p, int r)
-        : id(i), priority(p), remaining_time(r) {}
+        : id(i), priority(p), remaining_time(r), queue_level(0), time_run_in_level(0),
+        vruntime(0.0), weight(1.0) {}
 };
 
 // Records one slice of execution by a task
@@ -54,6 +62,8 @@ private:
     void runFCFS();
     void runRR();
     void runPriority();
+    void runCFS();
+    void runMLFQ();
 };
 
 #endif

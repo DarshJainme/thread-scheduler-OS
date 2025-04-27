@@ -132,6 +132,8 @@ void ThreadedScheduler::run() {
         case T_FCFS:    runFCFS();    break;
         case T_RR:      runRR();      break;
         case T_PRIORITY:runPriority();break;
+        case T_MLFQ:     runMLFQ();   break;
+        case T_CFS:      runCFS();    break;
     }
 }
 
@@ -212,4 +214,102 @@ void ThreadedScheduler::runPriority() {
         }
     }
     log("[T-PRIORITY] Done");
+}
+void ThreadedScheduler::runMLFQ() {
+    log("[T-MLFQ] Starting");
+    const int MAX_LEVELS = 3;
+    const int boost_interval = 500; // ms
+    int t = 0;
+    int since_boost = 0;
+
+    // Initialize all tasks to top queue
+    for (auto& tk_uptr : tasks) {
+        auto& tk = *tk_uptr;
+        tk->queue_level = 0;
+        tk->time_run_in_level = 0;
+    }
+
+    bool work_left = true;
+    while (work_left) {
+        work_left = false;
+        // Boost priorities periodically
+        if (since_boost >= boost_interval) {
+            for (auto& tk_uptr : tasks) {
+                auto& tk = *tk_uptr;
+                tk->queue_level = 0;
+                tk->time_run_in_level = 0;
+            }
+            since_boost = 0;
+            log("[T-MLFQ] Priority boost");
+        }
+        // Serve queues from highest to lowest
+        for (int lvl = 0; lvl < MAX_LEVELS; ++lvl) {
+            for (size_t i = 0; i < tasks.size(); ++i) {
+                auto& tk = *tasks[i];
+                if (tk.remaining_time > 0 && tk.queue_level == lvl) {
+                    work_left = true;
+                    int qtime = time_quantum << lvl; // larger quanta for lower queues
+                    int run = std::min(tk.remaining_time, qtime - tk.time_run_in_level);
+                    int s = t, e = s + run;
+                    _timeline.push_back({tk.id, s, e});
+                    log("[T-MLFQ] Task " + std::to_string(tk.id) + " lvl=" + std::to_string(lvl));
+                    run_ult_slice(i, run);
+                    tk.remaining_time -= run;
+                    tk.time_run_in_level += run;
+                    t = e;
+                    since_boost += run;
+                    // Demote if quantum exhausted
+                    if (tk.time_run_in_level >= qtime && lvl < MAX_LEVELS - 1) {
+                        tk.queue_level++;
+                        tk.time_run_in_level = 0;
+                    }
+                    if (tk.remaining_time <= 0) {
+                        g_contexts[i].finished = true;
+                        swapcontext(&sched_ctx, &g_contexts[i].ctx);
+                    }
+                }
+            }
+        }
+    }
+    log("[T-MLFQ] Done");
+}
+
+// Completely Fair Scheduler (CFS)
+void ThreadedScheduler::runCFS() {
+    log("[T-CFS] Starting");
+    int t = 0;
+    // Min-heap by vruntime
+    auto cmp = [&](size_t a, size_t b) {
+        return tasks[a]->vruntime > tasks[b]->vruntime;
+    };
+    std::priority_queue<size_t, std::vector<size_t>, decltype(cmp)> minheap(cmp);
+    for (size_t i = 0; i < tasks.size(); ++i) {
+        if (tasks[i]->remaining_time > 0)
+            minheap.push(i);
+    }
+    while (!minheap.empty()) {
+        size_t idx = minheap.top(); minheap.pop();
+        auto& tk = *tasks[idx];
+        // Calculate timeslice proportional to weight
+        double total_weight = 0;
+        for (auto& up : tasks)
+            if (up->remaining_time > 0) total_weight += up->weight;
+        int slice = std::max(1, int((tk.weight / total_weight) * time_quantum));
+        int run = std::min(tk.remaining_time, slice);
+        int s = t, e = s + run;
+        _timeline.push_back({tk.id, s, e});
+        log("[T-CFS] Task " + std::to_string(tk.id) + " vruntime=" + std::to_string(tk.vruntime));
+        run_ult_slice(idx, run);
+        // Update vruntime = vruntime + run * (1024/weight)
+        tk.vruntime += run * (1024.0 / tk.weight);
+        tk.remaining_time -= run;
+        t = e;
+        if (tk.remaining_time > 0) {
+            minheap.push(idx);
+        } else {
+            g_contexts[idx].finished = true;
+            swapcontext(&sched_ctx, &g_contexts[idx].ctx);
+        }
+    }
+    log("[T-CFS] Done");
 }

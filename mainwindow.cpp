@@ -28,7 +28,7 @@ void MainWindow::on_runButton_clicked() {
 
     QStringList basicAlgos = {"FCFS", "RR", "PRIORITY", "SJF", "MLQ", "MLFQ", "EDF", "CFS"};
 
-    QStringList threadedAlgos = {"T_FCFS", "T_RR", "T_PRIORITY", "T_MLFQ"};
+    QStringList threadedAlgos = {"T_FCFS", "T_RR", "T_PRIORITY", "T_MLFQ", "T_CFS"};
 
     // Run Basic Schedulers
     for (int alg = FCFS; alg <= CFS; ++alg) {
@@ -43,7 +43,7 @@ void MainWindow::on_runButton_clicked() {
     }
 
     // Run Threaded Schedulers
-    for (int alg = T_FCFS; alg <=T_MLFQ; ++alg) {
+    for (int alg = T_FCFS; alg <=T_CFS; ++alg) {
         QString name = threadedAlgos[alg];
         createAlgoTab(name, ui->threadedSchedulerTabs, logs_threaded, gantts_threaded);
 
