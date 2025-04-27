@@ -1,0 +1,12 @@
+[CFS] Starting (with arrival times)
+[CFS] T1 vruntime=0.000000 0->100
+[CFS] T2 vruntime=0.000000 100->200
+[CFS] T2 vruntime=7.692308 200->250
+[CFS] T1 vruntime=12.500000 250->350
+[CFS] T1 vruntime=25.000000 350->400
+[CFS] T3 vruntime=0.000000 420->520
+[CFS] T4 vruntime=0.000000 520->620
+[CFS] T4 vruntime=4.761905 620->670
+[CFS] T3 vruntime=5.263158 670->770
+[CFS] T3 vruntime=10.526316 770->870
+[CFS] Done
