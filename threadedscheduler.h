@@ -1,4 +1,3 @@
-// File: threadedscheduler.h — updated for ULT implementation
 #ifndef THREADEDSCHEDULER_H
 #define THREADEDSCHEDULER_H
 
@@ -6,7 +5,7 @@
 #include <memory>
 #include <string>
 #include <functional>
-#include "threadcontrol.h"
+#include "ult_sync.h" 
 
 // Available scheduling algorithms
 enum ThreadedAlgorithm {
@@ -15,37 +14,39 @@ enum ThreadedAlgorithm {
     T_PRIORITY
 };
 
-// Represents a user‐level thread task
+// Represents a user-level thread task
 struct ThreadedTask {
     int id;               // Task identifier
     int priority;         // Dynamic priority
     int remaining_time;   // Remaining work (ms)
-    ThreadControl control;// ULT control block
 
     ThreadedTask(int i, int p, int r)
         : id(i), priority(p), remaining_time(r) {}
 };
 
-// Records a single slice execution by a task
+// Records one slice of execution by a task
 struct ThreadedTimelineEntry {
     int task_id;
     int start_time;
     int end_time;
 };
 
-// User‐Level Thread Scheduler
+// User-Level Thread Scheduler class
+typedef std::function<void(const std::string&)> Logger;
+
 class ThreadedScheduler {
 public:
     ThreadedScheduler(ThreadedAlgorithm algo,
                       int tq = 100,
-                      std::function<void(const std::string&)> log = nullptr);
+                      Logger log = nullptr);
     void run();
     const std::vector<ThreadedTimelineEntry>& timeline() const;
 
 private:
     ThreadedAlgorithm algorithm;
     int time_quantum;
-    std::function<void(const std::string&)> logger;
+    Logger logger;
+
     std::vector<std::unique_ptr<ThreadedTask>> tasks;
     std::vector<ThreadedTimelineEntry> _timeline;
 
@@ -55,4 +56,4 @@ private:
     void runPriority();
 };
 
-#endif // THREADEDSCHEDULER_H
+#endif
