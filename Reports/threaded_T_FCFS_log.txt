@@ -1,0 +1,6 @@
+[T-FCFS] Starting
+[T-FCFS] Task 1 0->250
+[T-FCFS] Task 2 250->350
+[T-FCFS] Task 3 350->650
+[T-FCFS] Task 4 650->800
+[T-FCFS] Done

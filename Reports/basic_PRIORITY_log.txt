@@ -1,0 +1,12 @@
+[PR] Starting with feedback+aging
+[PR ] T1 pr=8 0->100
+[PR ] T2 pr=13 100->200
+[PR ] T2 pr=11 200->250
+[PR ] T1 pr=8 250->350
+[PR ] T1 pr=6 350->400
+[PR ] T3 pr=19 420->520
+[PR ] T4 pr=21 520->620
+[PR ] T4 pr=19 620->670
+[PR ] T3 pr=19 670->770
+[PR ] T3 pr=17 770->870
+[PR] Done
