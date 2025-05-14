@@ -58,7 +58,7 @@ struct Task
             lock.unlock();
 
             // Simulate work by sleeping WORK_SLICE_MS.
-            std::this_thread::sleep_for(std::chrono::milliseconds(WORK_SLICE_MS));
+            // std::this_thread::sleep_for(std::chrono::milliseconds(WORK_SLICE_MS));
             cpuTime += WORK_SLICE_MS;
             remainingWork -= WORK_SLICE_MS;
 
@@ -206,7 +206,7 @@ private:
             task->run_flag = true;
             task->cv.notify_one();
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(TIME_QUANTUM_MS));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(TIME_QUANTUM_MS));
         {
             std::unique_lock<std::mutex> lock(task->mtx);
             task->run_flag = false;

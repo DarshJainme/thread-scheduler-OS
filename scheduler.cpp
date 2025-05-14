@@ -80,7 +80,7 @@ void Scheduler::runFCFS()
         _timeline.push_back({tk.id, s, e});
         log("[FCFS] T" + std::to_string(tk.id) + " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(tk.remaining_time / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(tk.remaining_time / 10));
         t = e;
     }
     log("[FCFS] Done");
@@ -117,7 +117,7 @@ void Scheduler::runRR()
         _timeline.push_back({tk->id, s, e});
         log("[RR] T" + std::to_string(tk->id) + " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
 
         t = e;
         tk->remaining_time -= run;
@@ -186,7 +186,7 @@ void Scheduler::runPriority()
             " pr=" + std::to_string(tk->priority) +
             " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
 
         t = e;
         tk->remaining_time -= run;
@@ -255,7 +255,7 @@ void Scheduler::runSJF()
         _timeline.push_back({tk->id, s, e});
         log("[SJF] T" + std::to_string(tk->id) + " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(tk->remaining_time / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(tk->remaining_time / 10));
 
         t = e;
 
@@ -330,7 +330,7 @@ void Scheduler::runMLQ()
             " pr=" + std::to_string(tk->priority) +
             " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(tk->remaining_time / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(tk->remaining_time / 10));
 
         t = e;
 
@@ -398,7 +398,7 @@ void Scheduler::runMLFQ()
             " L" + std::to_string(lvl) +
             " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
 
         t = e;
         tk->remaining_time -= run;
@@ -462,7 +462,7 @@ void Scheduler::runEDF()
         log("[EDF] T" + std::to_string(tk->id) + " dl=" + std::to_string(tk->deadline) +
             " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(run / 10));
 
         t = e;
         tk->remaining_time -= run;
@@ -544,7 +544,7 @@ void Scheduler::runCFS()
         log("[CFS] T" + std::to_string(tk->id) + " vruntime=" + std::to_string(vruntime[tk]) +
             " " + std::to_string(s) + "->" + std::to_string(e));
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(slice / 10));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(slice / 10));
 
         t = e;
         tk->remaining_time -= slice;
